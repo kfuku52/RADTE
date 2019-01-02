@@ -1,0 +1,104 @@
+12	0	0	33	41	81	41	0.003153258,0.153522216	Off	1	1	1.5	0.0	3.0	1.0
+nD	nCD	nT	nL	|L(G)|	|G|	|S|	minEW,maxEW	Roots	Cand	Feas	cD	cCD	cT	cL
+
+
+#D	Duplication	L.Bound	U.Bound
+#D	n80	n202	N/A
+#D	n20	42	40
+#D	n12	43	42
+#D	n9	35	43
+#D	n8	Macaca_mulatta	27
+#D	n19	Canis_lupus	8
+#D	n39	10	n202
+#D	n79	n202	N/A
+#D	n55	10	n202
+#D	n52	13	10
+#D	n72	42	40
+#D	n68	42	40
+
+#L	Species	Losses
+#L	Rattus_norvegicus	0
+#L	35	3
+#L	40	0
+#L	Canis_lupus	2
+#L	47	1
+#L	n202	0
+#L	19	1
+#L	6	1
+#L	Xenopus_tropicalis	0
+#L	Macaca_mulatta	1
+#L	9	0
+#L	Bos_taurus	0
+#L	22	1
+#L	8	2
+#L	43	1
+#L	14	0
+#L	Danio_rerio	0
+#L	Chinchilla_lanigera	2
+#L	Sus_scrofa	1
+#L	Ovis_aries	1
+#L	Callithrix_jacchus	1
+#L	11	1
+#L	Mus_musculus	0
+#L	Oreochromis_niloticus	1
+#L	30	1
+#L	Ornithorhynchus_anatinus	2
+#L	Gallus_gallus	0
+#L	Astyanax_mexicanus	1
+#L	42	0
+#L	51	0
+#L	Oryzias_latipes	1
+#L	10	0
+#L	48	0
+#L	Anolis_carolinensis	0
+#L	27	0
+#L	13	2
+#L	Oryctolagus_cuniculus	2
+#L	29	1
+#L	Homo_sapiens	1
+#L	Gadus_morhua	1
+#L	Monodelphis_domestica	1
+
+#S	Species	Dups	cDs	Trans_from	Trans_to	Losses
+#S	Rattus_norvegicus	0	0	0	0	0
+#S	35	1	0	0	0	3
+#S	40	0	0	0	0	0
+#S	Canis_lupus	1	0	0	0	2
+#S	47	0	0	0	0	1
+#S	n202	2	0	0	0	0
+#S	19	0	0	0	0	1
+#S	6	0	0	0	0	1
+#S	Xenopus_tropicalis	0	0	0	0	0
+#S	Macaca_mulatta	1	0	0	0	1
+#S	9	0	0	0	0	0
+#S	Bos_taurus	0	0	0	0	0
+#S	22	0	0	0	0	1
+#S	8	0	0	0	0	2
+#S	43	1	0	0	0	1
+#S	14	0	0	0	0	0
+#S	Danio_rerio	0	0	0	0	0
+#S	Chinchilla_lanigera	0	0	0	0	2
+#S	Sus_scrofa	0	0	0	0	1
+#S	Ovis_aries	0	0	0	0	1
+#S	Callithrix_jacchus	0	0	0	0	1
+#S	11	0	0	0	0	1
+#S	Mus_musculus	0	0	0	0	0
+#S	Oreochromis_niloticus	0	0	0	0	1
+#S	30	0	0	0	0	1
+#S	Ornithorhynchus_anatinu	0	0	0	0	2
+#S	Gallus_gallus	0	0	0	0	0
+#S	Astyanax_mexicanus	0	0	0	0	1
+#S	42	3	0	0	0	0
+#S	51	0	0	0	0	0
+#S	Oryzias_latipes	0	0	0	0	1
+#S	10	2	0	0	0	0
+#S	48	0	0	0	0	0
+#S	Anolis_carolinensis	0	0	0	0	0
+#S	27	0	0	0	0	0
+#S	13	1	0	0	0	2
+#S	Oryctolagus_cuniculus	0	0	0	0	2
+#S	29	0	0	0	0	1
+#S	Homo_sapiens	0	0	0	0	1
+#S	Gadus_morhua	0	0	0	0	1
+#S	Monodelphis_domestica	0	0	0	0	1
+
