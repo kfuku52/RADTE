@@ -69,5 +69,8 @@ Rscript radte.R \
 #### gene_tree_output.nwk
 ![](img/radte_gene_tree_output.svg)
 
+# Citation
+Fukushima K, Pollock DD. (2018) Amalgamated cross-species transcriptomes indicate organ-specific preadaptation for functional shifts in gene expression. bioRxiv 409888 ([DOI: 10.1101/409888](https://www.biorxiv.org/content/early/2018/09/05/409888))
+
 # Licensing
 This program is BSD-licensed (3 clause). See [LICENSE](LICENSE) for details.
