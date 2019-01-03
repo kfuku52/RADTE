@@ -16,21 +16,23 @@ max_age = as.numeric(args[['max_age']])
 chronos_lambda = as.numeric(args[['chronos_lambda']])
 chronos_model = args[['chronos_model']]
 
-cat("species tree:", sp_file, '\n')
-cat("gene tree:", gn_file, '\n')
-cat("notung event:", parsable_file, '\n')
-
 gn_tree = read.tree(gn_file)
 gn_tree$node.label = gsub("\\'", "",gn_tree$node.label)
 
 tree_text0 = scan(sp_file, what=character(), sep="\n", blank.lines.skip=FALSE)
 tree_text1 = gsub("'([0-9]+)'", "PLACEHOLDER\\1", tree_text0)
 sp_tree = read.tree(text=tree_text1)
-sp_tree$node.label = sub('PLACEHOLDER', '', sp_tree$node.label)
+if (all(is.na(sp_tree$node.label))) {
+    sp_tree
+} else {
+    sp_tree$node.label = sub('PLACEHOLDER', '', sp_tree$node.label)
+}
+
 
 root_depth = max(node.depth.edgelength(sp_tree))
 sp_node_ages = abs(node.depth.edgelength(sp_tree) - root_depth)
 sp_node_names = c(sp_tree$tip.label, sp_tree$node.label)
+
 sp_node_table = data.frame(node=sp_node_names, age=sp_node_ages, spp=NA)
 
 for (sp_sub in ape::subtrees(sp_tree)) {
@@ -83,7 +85,7 @@ if ((sum(gn_node_table$event=="D") > 0)&(any(is.na(gn_node_table$upper_age)))) {
     num_sp = length(gn_spp)
     cat('# species in the gene tree:', num_sp, '\n')
     cat('Species in the gene tree:', paste(gn_spp, collapse=', '), '\n')
-    num_sp_gntree = max(1, getMRCA(sp_tree, gn_spp))
+    num_sp_gntree = max(1, ape::getMRCA(sp_tree, gn_spp))
     if (num_sp_gntree==rkftools::get_root_num(sp_tree)) {
         divtime_max = max_age
         divtime_min = max(ape::node.depth.edgelength(sp_tree))
@@ -91,15 +93,15 @@ if ((sum(gn_node_table$event=="D") > 0)&(any(is.na(gn_node_table$upper_age)))) {
         if (length(gn_spp)==1) {
             num_mrca = rkftools::get_node_num_by_name(sp_tree, gn_spp)
         } else {
-            num_mrca = getMRCA(sp_tree, gn_spp)
+            num_mrca = ape::getMRCA(sp_tree, gn_spp)
         }
         num_parent = sp_tree$edge[,1][sp_tree$edge[,2]==num_mrca]
         label_mrca = get_node_name_by_num(phy=sp_tree, node_num=num_mrca)
         label_parent = get_node_name_by_num(phy=sp_tree, node_num=num_parent)
         divtime_max = sp_node_table[sp_node_table$node==label_parent,'age']
         divtime_min = sp_node_table[sp_node_table$node==label_mrca,'age']
-        cat('Species in the MRCA species tree clade:', sp_node_table[sp_node_table$node==label_mrca,'spp'], '\n')
-        cat('Species in the parent species tree clade:', sp_node_table[sp_node_table$node==label_parent,'spp'], '\n')
+        cat('Species in the MRCA species tree clade:', paste(sp_node_table[sp_node_table$node==label_mrca,'spp'], collapse=', '), '\n')
+        cat('Species in the parent species tree clade:', paste(sp_node_table[sp_node_table$node==label_parent,'spp'], collapse=', '), '\n')
     }
     cat('Divergence time of the parent species tree clade:', divtime_max, '\n')
     cat('Divergence time of the MRCA species tree clade:', divtime_min, '\n')

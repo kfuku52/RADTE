@@ -21,6 +21,13 @@ If the estimation fails, the constraints are gradually relaxed until successful 
 Species tree with estimated divergence time.
 Leaves (species) should be labeled as `GENUS_SPECIES` (e.g., Homo_sapiens).
 The tree is expected to be ultrametric and branch lengths should represent evolutionary time (e.g., million years).
+Internal nodes must be uniquely labeled and the same file should be consistently used for **NOTUNG** and **RADTE**.
+Don't know how to label internal nodes? Try this R one-liner.
+```
+R -q -e "library(ape); t=read.tree('species_tree_noLabel.nwk'); \
+t[['node.label']]=paste0('s',1:(length(t[['tip.label']])-1)); \
+write.tree(t, 'species_tree.nwk')"
+```
 #### `--gene_tree`
 Leaves (genes) should be labeled as `GENUS_SPECIES_GENEID` (e.g., Homo_sapiens_ENSG00000102144). The tree is expected to be non-ultrametric and branch lengths should represent substitutions per site. 
 Use the tree that **NOTUNG** produces because its internal nodes are correctly labeled in accordance with the **NOTUNG parsable file**, another input for this program.

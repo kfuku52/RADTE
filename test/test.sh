@@ -6,8 +6,10 @@ source ~/.bash_profile
 
 notung_dir="/Applications/Notung-2.9"
 #out_dir="../data/OG0000567/output"
-out_dir="../data/OG0001076/output"
+#out_dir="../data/OG0001076/output"
 #out_dir="../data/OG0002332/output"
+out_dir="../data/PLANT_OG0000099/output"
+
 if [ -e ${out_dir} ]; then
     rm -r ${out_dir}
 fi
