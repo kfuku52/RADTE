@@ -2,13 +2,17 @@
 
 source ~/.bash_profile
 
+cd /Users/kef74yk/Dropbox_w/repos/RADTE/test
+
 # R -q -e 'devtools::install_local(path="../../rkftools", reload=TRUE, quick=FALSE, local=TRUE, dep=FALSE)'
 
 notung_dir="/Applications/Notung-2.9"
+out_dir="../data/OG0008714/output"
 #out_dir="../data/OG0000567/output"
 #out_dir="../data/OG0001076/output"
 #out_dir="../data/OG0002332/output"
-out_dir="../data/PLANT_OG0000099/output"
+#out_dir="../data/PLANT_OG0000099/output"
+#out_dir="../data/PLANT_IDA/output"
 
 if [ -e ${out_dir} ]; then
     rm -r ${out_dir}

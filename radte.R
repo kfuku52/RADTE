@@ -43,7 +43,10 @@ for (sp_sub in ape::subtrees(sp_tree)) {
 gn_node_table = read_notung_parsable(file=parsable_file, mode='D')
 gn_node_table = merge(gn_node_table, data.frame(lower_age=NA, upper_age=NA, spp=NA), all=TRUE)
 if (nrow(gn_node_table) > 0) {
-    gn_node_table$gn_node_num = sapply(gn_node_table[,'gn_node'], function(x){rkftools::get_node_num_by_name(gn_tree, x)})
+    print(gn_node_table[,'gn_node'])
+    gn_node_nums = sapply(gn_node_table[,'gn_node'], function(x){rkftools::get_node_num_by_name(gn_tree, x)})
+    print(str(gn_node_nums))
+    gn_node_table$gn_node_num = gn_node_nums
     for (i in 1:nrow(gn_node_table)) {
         if (any(sp_node_table$node==gn_node_table$lower_sp_node[i])) {
             gn_node_table$lower_age[i] = sp_node_table$age[sp_node_table$node==gn_node_table$lower_sp_node[i]]
