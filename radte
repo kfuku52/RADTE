@@ -1,3 +1,5 @@
+#!/usr/bin/env Rscript
+
 # TODO: drop NOTUNG dependency
 # Created by: Kenji Fukushima
 # Created on: 2018-12-27
@@ -136,6 +138,7 @@ for (gn_sub in ape::subtrees(gn_tree)) {
     }
     gn_node_table_dropped = rbind(gn_node_table_dropped, gn_node_table[gn_node_table$gn_node_num==subtree_root_num,])
 }
+gn_node_table_dropped = gn_node_table_dropped[!duplicated(gn_node_table_dropped), ]
 
 calibration_table = data.frame(
     node=as.integer(gn_node_table_dropped$gn_node_num),
@@ -219,6 +222,13 @@ if ("try-error" %in% class(chronos_out)) {
     cat('All attempts for divergence time estimation were failed. Exiting.\n')
     q('no')
 } else {
+    cat('Writing output files.\n')
+
+    if (length(args[['pad_short_edge']])) {
+        chronos_out = rkftools::pad_short_edges(chronos_out, threshold=args[['pad_short_edge']], external_only=FALSE)
+        chronos_out = rkftools::force_ultrametric(chronos_out, stop_if_larger_change=0.01)
+    }
+
     write(calibrated_node, file='radte_calibrated_nodes.txt')
 
     write.tree(chronos_out, file="radte_gene_tree_output.nwk")

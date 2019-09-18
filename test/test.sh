@@ -2,12 +2,14 @@
 
 source ~/.bash_profile
 
-cd /Users/kef74yk/Dropbox_w/repos/RADTE/test
+dir_repo="/Users/kef74yk/Dropbox_w/repos"
 
-# R -q -e 'devtools::install_local(path="../../rkftools", reload=TRUE, quick=FALSE, local=TRUE, dep=FALSE)'
+cd ${dir_repo}/RADTE/test
+
+# R -q -e 'devtools::install_local(path="/Users/kef74yk/Dropbox_w/repos/rkftools", reload=TRUE, quick=FALSE, local=TRUE, dep=FALSE)'
 
 notung_dir="/Applications/Notung-2.9"
-out_dir="../data/OG0008714/output"
+out_dir="../data/OG0000062/output"
 #out_dir="../data/OG0000567/output"
 #out_dir="../data/OG0001076/output"
 #out_dir="../data/OG0002332/output"
@@ -32,11 +34,14 @@ java -jar -Xmx2g ${notung_dir}/Notung-2.9.jar \
 --nolosses \
 --outputdir .
 
-Rscript ../../../radte.R \
+../../../radte \
 --species_tree=../input/species_tree.nwk \
---gene_tree=gene_tree.nwk.reconciled \
---notung_parsable=gene_tree.nwk.reconciled.parsable.txt \
+--gene_tree=gene_tree.nwk.reconciled.0 \
+--notung_parsable=gene_tree.nwk.reconciled.0.parsable.txt \
 --max_age=1000 \
 --chronos_lambda=1 \
---chronos_model=discrete
+--chronos_model=discrete \
+--pad_short_edge=0.001
+
+
 

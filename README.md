@@ -40,6 +40,8 @@ If duplication nodes are deeper than the root node of the species tree, this val
 See `chronos` in the [**ape** documentation](https://www.rdocumentation.org/packages/ape/versions/5.2/topics/chronos).
 #### `--chronos_model`
 See `chronos` in the [**ape** documentation](https://www.rdocumentation.org/packages/ape/versions/5.2/topics/chronos).
+#### `--pad_short_edge`
+Prohibit dated branches shorter than this value. If detected, the branch length is readjusted by transferring a certain branch length from the parent branch.
 
 # Examples
 ```
@@ -64,8 +66,8 @@ Rscript radte.R \
 --notung_parsable=gene_tree_input.nwk.reconciled.parsable.txt \
 --max_age=1000 \
 --chronos_lambda=1 \
---chronos_model=discrete
-
+--chronos_model=discrete \
+--pad_short_edge=0.001
 ```
 #### species_tree.nwk
 ![](img/radte_species_tree.svg)
