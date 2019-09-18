@@ -6,7 +6,7 @@ Currently, only point estimates are supported to constrain speciation events.
 Confidence intervals of species divergence time will be incorporated in future. 
 **RADTE** first attempts to constrain all available calibration points transferred from the species tree (**R**, root node; **D**, duplication node; **S**, speciation node) for the divergence time estimation by `chronos` from the **ape** package.
 If the estimation fails, the constraints are gradually relaxed until successful estimation is obtained.
-**RADTE is under development. Use at your own risk. Any feedback is welcomed.**
+**RADTE** is under development. Any feedback is welcomed.
 
 ![](img/radte_method.svg)
 
@@ -60,7 +60,7 @@ java -jar -Xmx2g Notung-2.9.jar \
 --outputdir .
 
 # Run RADTE
-Rscript radte.R \
+./radte \
 --species_tree=species_tree.nwk \
 --gene_tree=gene_tree_input.nwk.reconciled \
 --notung_parsable=gene_tree_input.nwk.reconciled.parsable.txt \
