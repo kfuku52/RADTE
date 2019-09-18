@@ -1,4 +1,4 @@
-# Overview
+## Overview
 **R**econciliation-**A**ssisted **D**ivergence **T**ime **E**stimation (**RADTE**) is a method to date gene trees with the aid of dated species trees.
 This program can handle a rooted gene tree containing duplication/loss events.
 The divergence time of duplication nodes are estimated while constraining speciation nodes.
@@ -10,13 +10,20 @@ If the estimation fails, the constraints are gradually relaxed until successful 
 
 ![](img/radte_method.svg)
 
-# Dependency
+## Dependency
 * [R 3.x](https://www.r-project.org/)
 * [ape](http://ape-package.ird.fr/)
 * [rkftools](https://github.com/kfuku52/rkftools)
 * [NOTUNG](http://www.cs.cmu.edu/~durand/Notung/) (RADTE doesn't directly handle it but needs its outputs.)
 
-# Options
+## Installation
+After installing the above dependencies, please download the `radte` script by, for example, `svn`, and change the file permission.
+```
+svn export https://github.com/kfuku52/RADTE/trunk/radte
+chmod +x ./radte
+```
+
+## Options
 #### `--species_tree`
 Species tree with estimated divergence time.
 Leaves (species) should be labeled as `GENUS_SPECIES` (e.g., Homo_sapiens).
@@ -43,7 +50,7 @@ See `chronos` in the [**ape** documentation](https://www.rdocumentation.org/pack
 #### `--pad_short_edge`
 Prohibit dated branches shorter than this value. If detected, the branch length is readjusted by transferring a certain branch length from the parent branch.
 
-# Examples
+## Examples
 ```
 # Run NOTUNG in the reconciliation mode
 # Don't forget to specify --parsable
@@ -78,8 +85,8 @@ java -jar -Xmx2g Notung-2.9.jar \
 #### gene_tree_output.nwk
 ![](img/radte_gene_tree_output.svg)
 
-# Citation
+## Citation
 Fukushima K, Pollock DD. (2018) Amalgamated cross-species transcriptomes indicate organ-specific preadaptation for functional shifts in gene expression. bioRxiv 409888 ([DOI: 10.1101/409888](https://www.biorxiv.org/content/early/2018/09/05/409888))
 
-# Licensing
+## Licensing
 This program is BSD-licensed (3 clause). See [LICENSE](LICENSE) for details.
