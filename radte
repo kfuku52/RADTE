@@ -1,26 +1,52 @@
 #!/usr/bin/env Rscript
-
-# TODO: drop NOTUNG dependency
-# Created by: Kenji Fukushima
-# Created on: 2018-12-27
-
 library(ape)
 library(rkftools)
+library(treeio)
 
-cat('arguments:\n')
-args = commandArgs(trailingOnly=TRUE)
-args = rkftools::get_parsed_args(args, print=TRUE)
+run_mode = ifelse(length(commandArgs(trailingOnly=TRUE))==1, 'debug', 'batch')
+cat('RADTE run_mode:', run_mode, '\n')
+if (run_mode=='batch') {
+    cat('arguments:\n')
+    args = commandArgs(trailingOnly=TRUE)
+    args = rkftools::get_parsed_args(args, print=TRUE)
+} else if (run_mode=='debug') {
+    test_type = 'generax'
+    args = list()
+    args[['max_age']] = 1000
+    args[['chronos_lambda']] = 0
+    args[['chronos_model']] = 'discrete'
+    args[['pad_short_edge']] = 0.001
+    if (test_type=='notung') {
+        args[['species_tree']] = "/Users/kef74yk/Dropbox_w/repos/RADTE/data/phyloxml1/input/labelled_species_tree.nwk"
+        args[['notung_parsable']] = ""
+    }
+    if (test_type=='generax') {
+        dir_work = '/Users/kef74yk/Dropbox_w/repos/RADTE/data/generax00/'
+        setwd(dir_work)
+        args[['species_tree']] = paste0(dir_work, "labelled_species_tree.nwk")
+        args[['generax_nwk']] = paste0(dir_work, "gene_tree.nwk")
+        args[['generax_nhx']] = paste0(dir_work, "gene_tree.nhx")
+    }
+}
 
+if ('generax_nhx' %in% names(args)) {
+    cat('--generax_nhx was detected. GeneRax mode.', '\n')
+    mode = 'generax'
+    generax_file = args[['generax_nhx']]
+} else if ('notung_parsable' %in% names(args)) {
+    cat('--notung_parsable was detected. Notung mode.', '\n')
+    mode = 'notung'
+    gn_file = args[['gene_tree']]
+    parsable_file = args[['notung_parsable']]
+} else {
+    stop('--notung_parsable or --generax_nhx should be specified. Exiting.\n')
+}
 sp_file = args[['species_tree']]
-gn_file = args[['gene_tree']]
-parsable_file = args[['notung_parsable']]
 max_age = as.numeric(args[['max_age']])
 chronos_lambda = as.numeric(args[['chronos_lambda']])
 chronos_model = args[['chronos_model']]
 
-gn_tree = read.tree(gn_file)
-gn_tree$node.label = gsub("\\'", "",gn_tree$node.label)
-
+# Species tree
 tree_text0 = scan(sp_file, what=character(), sep="\n", blank.lines.skip=FALSE)
 tree_text1 = gsub("'([0-9]+)'", "PLACEHOLDER\\1", tree_text0)
 sp_tree = read.tree(text=tree_text1)
@@ -29,63 +55,119 @@ if (all(is.na(sp_tree$node.label))) {
 } else {
     sp_tree$node.label = sub('PLACEHOLDER', '', sp_tree$node.label)
 }
-
-
 root_depth = max(node.depth.edgelength(sp_tree))
 sp_node_ages = abs(node.depth.edgelength(sp_tree) - root_depth)
 sp_node_names = c(sp_tree$tip.label, sp_tree$node.label)
-
 sp_node_table = data.frame(node=sp_node_names, age=sp_node_ages, spp=NA)
-
 for (sp_sub in ape::subtrees(sp_tree)) {
     root_node = sp_sub$node.label[1]
     sp_node_table$spp[sp_node_table$node==root_node] = list(sp_sub$tip.label)
 }
 
-gn_node_table = read_notung_parsable(file=parsable_file, mode='D')
-gn_node_table = merge(gn_node_table, data.frame(lower_age=NA, upper_age=NA, spp=NA), all=TRUE)
-if (nrow(gn_node_table) > 0) {
-    print(gn_node_table[,'gn_node'])
-    gn_node_nums = sapply(gn_node_table[,'gn_node'], function(x){rkftools::get_node_num_by_name(gn_tree, x)})
-    print(str(gn_node_nums))
-    gn_node_table$gn_node_num = gn_node_nums
-    for (i in 1:nrow(gn_node_table)) {
-        if (any(sp_node_table$node==gn_node_table$lower_sp_node[i])) {
-            gn_node_table$lower_age[i] = sp_node_table$age[sp_node_table$node==gn_node_table$lower_sp_node[i]]
-        }
-        if (any(sp_node_table$node==gn_node_table$upper_sp_node[i])) {
-            gn_node_table$upper_age[i] = sp_node_table$age[sp_node_table$node==gn_node_table$upper_sp_node[i]]
-        }
+# Gene tree
+if (mode=='generax') {
+    treetext = readLines(generax_file, warn=FALSE)
+    if (grep(");", treetext)) {
+        #treetext <- gsub(");", ")root[&&NHX:S=PLACEHOLDER:D=N:H=N::B=0];", treetext)
+        treetext <- gsub(");", ")root[&&NHX:];", treetext)
     }
-} else {
-    gn_node_table = gn_node_table[0,]
+    write(treetext, 'tmp.treetext.txt')
+    nhxtree = treeio::read.nhx('tmp.treetext.txt')
+    file.remove('tmp.treetext.txt')
+    
+    gn_tree = read.tree(args[['generax_nwk']])
+    # ape::read.tree() in v5.3 does not properly handle .nhx format. Use .nwk instead.
+    #gn_tree = nhxtree@phylo
+    #gn_tree$edge = gn_tree$edge[gn_tree$edge[,2]>0,] # unknowon row added to the last, removing it.
+    #gn_tree$edge = gn_tree$edge[gn_tree$edge[,1]>0,] # unknowon row added to the last, removing it.
+    
+    cols = c('event', 'gn_node', 'gn_node_num', 'lower_sp_node', 'upper_sp_node', 'lower_age', 'upper_age')
+
+    gn_node = c(nhxtree@phylo$tip.label, nhxtree@phylo$node.label)
+    gn_node_table = nhxtree@data
+    gn_node_table[['event']] = 'S'
+    gn_node_table[['D']][is.na(gn_node_table[['D']])] = 'N'
+    gn_node_table[(gn_node_table[['D']]=='Y'),'event'] = 'D'
+    colnames(gn_node_table) = sub('^S$', 'lower_sp_node', colnames(gn_node_table))
+    gn_node_table[['gn_node']] = gn_node
+    gn_node_table[['upper_sp_node']] = gn_node_table[['lower_sp_node']]
+    gn_node_table = gn_node_table[(gn_node_table[['gn_node']]!='root'),] ### Remove root node
+    gn_node_table[(gn_node_table[['event']]=='D'),'upper_sp_node'] = NA
+    for (sp_node in unique(gn_node_table[['lower_sp_node']])) {
+        node_num = get_node_num_by_name(sp_tree, sp_node)
+        parent_num = get_parent_num(sp_tree, node_num)
+        parent_name = get_node_name_by_num(sp_tree, parent_num)
+        if (identical(parent_name, character(0))) {
+            parent_name = NA
+        }
+        conditions = (gn_node_table[['lower_sp_node']]==sp_node)
+        conditions = conditions & (gn_node_table[['event']]=='D')
+        gn_node_table[conditions,'upper_sp_node'] = parent_name
+    }
+    gn_node_table[['lower_age']] = NA
+    gn_node_table[['upper_age']] = NA
+    for (sp_node in sp_node_table[['node']]) {
+        node_age = sp_node_table[(sp_node_table[['node']]==sp_node),'age']
+        conditions = (gn_node_table[['lower_sp_node']]==sp_node)
+        conditions = conditions & (gn_node_table[['upper_sp_node']]==sp_node)
+        conditions[is.na(conditions)] = FALSE
+        gn_node_table[conditions,'lower_age'] = node_age
+        gn_node_table[conditions,'upper_age'] = node_age
+    }
+    gn_node_table[['gn_node_num']] = get_node_num_by_name(gn_tree, gn_node_table[['gn_node']])
+    gn_node_table = data.frame(gn_node_table[,cols], stringsAsFactors=FALSE)
 }
 
-for (gn_sub in ape::subtrees(gn_tree)) {
-    root_node = gn_sub$node.label[1]
-    if (! root_node %in% gn_node_table$gn_node) {
-        root_num = rkftools::get_node_num_by_name(gn_tree, root_node)
-        node_spp = c()
-        for (gn_gene in gn_sub$tip.label) {
-            pos_underbar = gregexpr("_", gn_gene)[[1]]
-            node_sp = substring(gn_gene, 1, pos_underbar[length(pos_underbar)]-1)
-            node_spp = c(node_spp, node_sp)
+if (mode=='notung') {
+    gn_tree = read.tree(gn_file)
+    gn_tree$node.label = gsub("\\'", "",gn_tree$node.label)
+
+    gn_node_table = read_notung_parsable(file=parsable_file, mode='D')
+    gn_node_table = merge(gn_node_table, data.frame(lower_age=NA, upper_age=NA, spp=NA), all=TRUE)
+    if (nrow(gn_node_table) > 0) {
+        print(gn_node_table[,'gn_node'])
+        gn_node_nums = sapply(gn_node_table[,'gn_node'], function(x){rkftools::get_node_num_by_name(gn_tree, x)})
+        print(str(gn_node_nums))
+        gn_node_table$gn_node_num = gn_node_nums
+        for (i in 1:nrow(gn_node_table)) {
+            if (any(sp_node_table$node==gn_node_table$lower_sp_node[i])) {
+                gn_node_table$lower_age[i] = sp_node_table$age[sp_node_table$node==gn_node_table$lower_sp_node[i]]
+            }
+            if (any(sp_node_table$node==gn_node_table$upper_sp_node[i])) {
+                gn_node_table$upper_age[i] = sp_node_table$age[sp_node_table$node==gn_node_table$upper_sp_node[i]]
+            }
         }
-        node_age = min(sp_node_table$age[sapply(sp_node_table$spp, function(x){all(node_spp %in% x)})])
-        sp_node = sp_node_table$node[sp_node_table$age==node_age]
-        ind = nrow(gn_node_table)+1
-        gn_node_table[ind,'event'] = "S"
-        gn_node_table[ind,'gn_node'] = root_node
-        gn_node_table[ind,'gn_node_num'] = root_num
-        gn_node_table[ind,'lower_sp_node'] = sp_node
-        gn_node_table[ind,'upper_sp_node'] = sp_node
-        gn_node_table[ind,'lower_age'] = node_age
-        gn_node_table[ind,'upper_age'] = node_age
-        gn_node_table[ind,'spp'] = paste(node_spp, collapse='|')
+    } else {
+        gn_node_table = gn_node_table[0,]
+    }
+
+    for (gn_sub in ape::subtrees(gn_tree)) {
+        root_node = gn_sub$node.label[1]
+        if (! root_node %in% gn_node_table$gn_node) {
+            root_num = rkftools::get_node_num_by_name(gn_tree, root_node)
+            node_spp = c()
+            for (gn_gene in gn_sub$tip.label) {
+                pos_underbar = gregexpr("_", gn_gene)[[1]]
+                node_sp = substring(gn_gene, 1, pos_underbar[length(pos_underbar)]-1)
+                node_spp = c(node_spp, node_sp)
+            }
+            node_age = min(sp_node_table$age[sapply(sp_node_table$spp, function(x){all(node_spp %in% x)})])
+            sp_node = sp_node_table$node[sp_node_table$age==node_age]
+            ind = nrow(gn_node_table)+1
+            gn_node_table[ind,'event'] = "S"
+            gn_node_table[ind,'gn_node'] = root_node
+            gn_node_table[ind,'gn_node_num'] = root_num
+            gn_node_table[ind,'lower_sp_node'] = sp_node
+            gn_node_table[ind,'upper_sp_node'] = sp_node
+            gn_node_table[ind,'lower_age'] = node_age
+            gn_node_table[ind,'upper_age'] = node_age
+            gn_node_table[ind,'spp'] = paste(node_spp, collapse='|')
+        }
     }
 }
 
-if ((sum(gn_node_table$event=="D") > 0)&(any(is.na(gn_node_table$upper_age)))) {
+# Calibration node check
+if ((sum(gn_node_table[['event']]=="D") > 0)&(any(is.na(gn_node_table[['upper_age']])))) {
     gn_spp = unique(get_species_names(gn_tree))
     num_sp = length(gn_spp)
     cat('# species in the gene tree:', num_sp, '\n')
@@ -117,29 +199,33 @@ if ((sum(gn_node_table$event=="D") > 0)&(any(is.na(gn_node_table$upper_age)))) {
 root_num = rkftools::get_root_num(gn_tree)
 gn_node_table[(gn_node_table$gn_node_num==root_num),'event'] = paste0(gn_node_table[(gn_node_table$gn_node_num==root_num),'event'], '(R)')
 
-gn_node_table_dropped = data.frame()
-for (gn_sub in ape::subtrees(gn_tree)) {
-    subtree_root_node = gn_sub$node.label[1]
-    subtree_root_num = rkftools::get_node_num_by_name(gn_tree, subtree_root_node)
-    up_num = gn_tree$edge[gn_tree$edge[,2]==subtree_root_num,1]
-    if (length(up_num)>0) {
-        root_lower_age = gn_node_table[gn_node_table$gn_node_num==subtree_root_num,"lower_age"]
-        root_upper_age = gn_node_table[gn_node_table$gn_node_num==subtree_root_num,"upper_age"]
-        up_lower_age = gn_node_table[gn_node_table$gn_node_num==up_num,"lower_age"]
-        up_upper_age = gn_node_table[gn_node_table$gn_node_num==up_num,"upper_age"]
-        is_lower_violated = (root_lower_age>=up_lower_age)
-        is_upper_violated = (root_upper_age>=up_upper_age)
-        is_lower_violated = ifelse(is.na(is_lower_violated), FALSE, is_lower_violated)
-        is_upper_violated = ifelse(is.na(is_upper_violated), FALSE, is_upper_violated)
-        if (any(is_lower_violated, is_upper_violated)) {
-            cat('removed calibration node:', 'name =', subtree_root_node, 'up name =', get_node_name_by_num(gn_tree, up_num), 'num =', subtree_root_num, 'up num =', up_num, '\n')
-            next
-        }
+droppable_nodes = c()
+for (gn_node_num in gn_node_table[['gn_node_num']]) {
+    if (gn_node_num==root_num) {
+        next
     }
-    gn_node_table_dropped = rbind(gn_node_table_dropped, gn_node_table[gn_node_table$gn_node_num==subtree_root_num,])
+    child_lower = gn_node_table[(gn_node_table[['gn_node_num']]==gn_node_num),'lower_age']
+    child_upper = gn_node_table[(gn_node_table[['gn_node_num']]==gn_node_num),'upper_age']
+    ancestor_nums = get_ancestor_num(gn_tree, gn_node_num)
+    ancestor_lower = min(gn_node_table[(gn_node_table[['gn_node_num']]%in%ancestor_nums),'lower_age'])
+    ancestor_upper = min(gn_node_table[(gn_node_table[['gn_node_num']]%in%ancestor_nums),'upper_age'])
+    is_same_constraint = (child_lower>=ancestor_lower) & (child_upper>=ancestor_upper)
+    is_same_constraint = ifelse(length(is_same_constraint)==0, FALSE, is_same_constraint)
+    is_extant = (child_lower==0)&(child_upper==0)
+    if (is_same_constraint|is_extant) {
+        droppable_nodes = c(droppable_nodes, gn_node_num)
+        gn_node_name = rkftools::get_node_name_by_num(gn_tree, gn_node_num)
+        if (is_same_constraint) {
+            cat_text = 'calibration node removed because of the constraint identical to or greater than one of the upper node:'
+        } else if (is_extant) {
+            cat_text = 'calibration node removed because of the extant taxon:'
+        }
+        cat(cat_text, 'name =', gn_node_name, 'num =', gn_node_num, '\n')
+    }
 }
-gn_node_table_dropped = gn_node_table_dropped[!duplicated(gn_node_table_dropped), ]
+gn_node_table_dropped = gn_node_table[(!gn_node_table[['gn_node_num']] %in% droppable_nodes), ]
 
+# Calibration table
 calibration_table = data.frame(
     node=as.integer(gn_node_table_dropped$gn_node_num),
     age.min=as.numeric(gn_node_table_dropped$lower_age),
@@ -173,6 +259,7 @@ calibration_tables = list(
     'R' = calibration_table_R
 )
 
+# chronos
 chronos_out = NULL
 chronos_control = chronos.control()
 chronos_control$iter.max = 100000
@@ -252,7 +339,7 @@ if ("try-error" %in% class(chronos_out)) {
             int_node_ages = node_ages[(length(phy$tip.label)+1):length(node_ages)]
             phy$node.label = paste(phy$node.label, as.character(round(int_node_ages, digits=1)))
         }
-        pdf(file, height=length(phy$tip.label)/5+1, width=7.2)
+        pdf(file, height=max(3, length(phy$tip.label)/5+1), width=7.2)
         plot(phy, show.node.label=TRUE, show.tip.label=TRUE, cex=0.5, label.offset=0)
         invisible(dev.off())
     }
@@ -265,4 +352,6 @@ if ("try-error" %in% class(chronos_out)) {
     cat('Tree height:', max(ape::node.depth.edgelength(sp_tree)), 'million years', '\n')
     cat('Completed: RADTE divergence time estimation', '\n')
 }
+
+
 

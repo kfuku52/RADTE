@@ -13,7 +13,9 @@ If the estimation fails, the constraints are gradually relaxed until successful 
 ## Dependency
 * [R 3.x](https://www.r-project.org/)
 * [ape](http://ape-package.ird.fr/)
+* [treeio](https://github.com/YuLab-SMU/treeio)
 * [rkftools](https://github.com/kfuku52/rkftools)
+* [rphyloxml](https://uscbiostats.github.io/rphyloxml/)
 * [NOTUNG](http://www.cs.cmu.edu/~durand/Notung/) (RADTE doesn't directly handle it but needs its outputs.)
 
 ## Installation
@@ -84,6 +86,19 @@ java -jar -Xmx2g Notung-2.9.jar \
 
 #### gene_tree_output.nwk
 ![](img/radte_gene_tree_output.svg)
+
+## Example for GeneRax output files
+```
+./radte \
+--species_tree=species_tree.nwk \
+--generax_nwk=gene_tree.nwk \
+--generax_nhx=gene_tree.nhx \
+--max_age=1000 \
+--chronos_lambda=1 \
+--chronos_model=discrete \
+--pad_short_edge=0.001
+
+```
 
 ## Citation
 Fukushima K, Pollock DD. (2018) Amalgamated cross-species transcriptomes indicate organ-specific preadaptation for functional shifts in gene expression. bioRxiv 409888 ([DOI: 10.1101/409888](https://www.biorxiv.org/content/early/2018/09/05/409888))
