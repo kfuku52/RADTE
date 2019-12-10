@@ -24,7 +24,6 @@ if (run_mode=='batch') {
         dir_work = '/Users/kef74yk/Dropbox_w/repos/RADTE/data/generax00/'
         setwd(dir_work)
         args[['species_tree']] = paste0(dir_work, "labelled_species_tree.nwk")
-        args[['generax_nwk']] = paste0(dir_work, "gene_tree.nwk")
         args[['generax_nhx']] = paste0(dir_work, "gene_tree.nhx")
     }
 }
@@ -67,20 +66,15 @@ for (sp_sub in ape::subtrees(sp_tree)) {
 # Gene tree
 if (mode=='generax') {
     treetext = readLines(generax_file, warn=FALSE)
-    if (grep(");", treetext)) {
-        #treetext <- gsub(");", ")root[&&NHX:S=PLACEHOLDER:D=N:H=N::B=0];", treetext)
-        treetext <- gsub(");", ")root[&&NHX:];", treetext)
+    if (length(gregexpr('\\(', treetext)[[1]])-length(gregexpr('\\)', treetext)[[1]])==-1) {
+        cat('Number of parentheses in the .nhx is not consistent. Trying to fix.')
+        treetext <- gsub("\\);", ";", treetext)
     }
     write(treetext, 'tmp.treetext.txt')
     nhxtree = treeio::read.nhx('tmp.treetext.txt')
     file.remove('tmp.treetext.txt')
     
-    gn_tree = read.tree(args[['generax_nwk']])
-    # ape::read.tree() in v5.3 does not properly handle .nhx format. Use .nwk instead.
-    #gn_tree = nhxtree@phylo
-    #gn_tree$edge = gn_tree$edge[gn_tree$edge[,2]>0,] # unknowon row added to the last, removing it.
-    #gn_tree$edge = gn_tree$edge[gn_tree$edge[,1]>0,] # unknowon row added to the last, removing it.
-    
+    gn_tree = nhxtree@phylo    
     cols = c('event', 'gn_node', 'gn_node_num', 'lower_sp_node', 'upper_sp_node', 'lower_age', 'upper_age')
 
     gn_node = c(nhxtree@phylo$tip.label, nhxtree@phylo$node.label)

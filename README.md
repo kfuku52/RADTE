@@ -91,7 +91,6 @@ java -jar -Xmx2g Notung-2.9.jar \
 ```
 ./radte \
 --species_tree=species_tree.nwk \
---generax_nwk=gene_tree.nwk \
 --generax_nhx=gene_tree.nhx \
 --max_age=1000 \
 --chronos_lambda=1 \
@@ -101,7 +100,7 @@ java -jar -Xmx2g Notung-2.9.jar \
 ```
 
 ## Citation
-Fukushima K, Pollock DD. (2018) Amalgamated cross-species transcriptomes indicate organ-specific preadaptation for functional shifts in gene expression. bioRxiv 409888 ([DOI: 10.1101/409888](https://www.biorxiv.org/content/early/2018/09/05/409888))
+Fukushima K, Pollock DD. (2019) Organ-specific propensity drives patterns of gene expression evolution. bioRxiv 409888 ([DOI: 10.1101/409888](https://www.biorxiv.org/content/10.1101/409888v2))
 
 ## Licensing
 This program is BSD-licensed (3 clause). See [LICENSE](LICENSE) for details.
