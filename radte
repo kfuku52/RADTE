@@ -17,13 +17,13 @@ if (run_mode=='batch') {
     args[['chronos_model']] = 'discrete'
     args[['pad_short_edge']] = 0.001
     if (test_type=='notung') {
-        args[['species_tree']] = "/Users/kef74yk/Dropbox_w/repos/RADTE/data/phyloxml1/input/labelled_species_tree.nwk"
+        args[['species_tree']] = "/Users/kef74yk/Dropbox_w/repos/RADTE/data/phyloxml1/input/dated_species_tree.generax.nwk"
         args[['notung_parsable']] = ""
     }
     if (test_type=='generax') {
-        dir_work = '/Users/kef74yk/Dropbox_w/repos/RADTE/data/generax00/'
+        dir_work = '/Users/kef74yk/Dropbox_w/repos/RADTE/data/generax01/'
         setwd(dir_work)
-        args[['species_tree']] = paste0(dir_work, "labelled_species_tree.nwk")
+        args[['species_tree']] = paste0(dir_work, "dated_species_tree.generax.nwk")
         args[['generax_nhx']] = paste0(dir_work, "gene_tree.nhx")
     }
 }
@@ -45,14 +45,15 @@ max_age = as.numeric(args[['max_age']])
 chronos_lambda = as.numeric(args[['chronos_lambda']])
 chronos_model = args[['chronos_model']]
 
-# Species tree
+cat('Start: species tree processing', '\n')
 tree_text0 = scan(sp_file, what=character(), sep="\n", blank.lines.skip=FALSE)
 tree_text1 = gsub("'([0-9]+)'", "PLACEHOLDER\\1", tree_text0)
 sp_tree = read.tree(text=tree_text1)
+sp_tree = rkftools::force_ultrametric(sp_tree)
 if (all(is.na(sp_tree$node.label))) {
     sp_tree
 } else {
-    sp_tree$node.label = sub('PLACEHOLDER', '', sp_tree$node.label)
+    sp_tree[['node.label']] = sub('PLACEHOLDER', '', sp_tree[['node.label']])
 }
 root_depth = max(node.depth.edgelength(sp_tree))
 sp_node_ages = abs(node.depth.edgelength(sp_tree) - root_depth)
@@ -62,8 +63,9 @@ for (sp_sub in ape::subtrees(sp_tree)) {
     root_node = sp_sub$node.label[1]
     sp_node_table$spp[sp_node_table$node==root_node] = list(sp_sub$tip.label)
 }
+cat('End: species tree processing', '\n')
 
-# Gene tree
+cat('Start: gene tree processing', '\n')
 if (mode=='generax') {
     treetext = readLines(generax_file, warn=FALSE)
     if (length(gregexpr('\\(', treetext)[[1]])-length(gregexpr('\\)', treetext)[[1]])==-1) {
@@ -111,6 +113,7 @@ if (mode=='generax') {
     gn_node_table[['gn_node_num']] = get_node_num_by_name(gn_tree, gn_node_table[['gn_node']])
     gn_node_table = data.frame(gn_node_table[,cols], stringsAsFactors=FALSE)
 }
+cat('End: gene tree processing', '\n')
 
 if (mode=='notung') {
     gn_tree = read.tree(gn_file)
