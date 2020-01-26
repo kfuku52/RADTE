@@ -1,7 +1,6 @@
 #!/usr/bin/env Rscript
 library(ape)
 library(rkftools)
-library(treeio)
 
 run_mode = ifelse(length(commandArgs(trailingOnly=TRUE))==1, 'debug', 'batch')
 cat('RADTE run_mode:', run_mode, '\n')
@@ -17,13 +16,13 @@ if (run_mode=='batch') {
     args[['chronos_model']] = 'discrete'
     args[['pad_short_edge']] = 0.001
     if (test_type=='notung') {
-        args[['species_tree']] = "/Users/kef74yk/Dropbox_w/repos/RADTE/data/phyloxml1/input/dated_species_tree.generax.nwk"
+        args[['species_tree']] = "/Users/kef74yk/Dropbox_p/repos/RADTE/data/phyloxml1/input/dated_species_tree.generax.nwk"
         args[['notung_parsable']] = ""
     }
     if (test_type=='generax') {
-        dir_work = '/Users/kef74yk/Dropbox_w/repos/RADTE/data/generax01/'
+        dir_work = '/Users/kef74yk/Dropbox_p/repos/RADTE/data/GH3/'
         setwd(dir_work)
-        args[['species_tree']] = paste0(dir_work, "dated_species_tree.generax.nwk")
+        args[['species_tree']] = paste0(dir_work, "species_tree.nwk")
         args[['generax_nhx']] = paste0(dir_work, "gene_tree.nhx")
     }
 }

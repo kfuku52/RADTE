@@ -15,14 +15,21 @@ If the estimation fails, the constraints are gradually relaxed until successful 
 * [ape](http://ape-package.ird.fr/)
 * [treeio](https://github.com/YuLab-SMU/treeio)
 * [rkftools](https://github.com/kfuku52/rkftools)
-* [rphyloxml](https://uscbiostats.github.io/rphyloxml/)
-* [NOTUNG](http://www.cs.cmu.edu/~durand/Notung/) (RADTE doesn't directly handle it but needs its outputs.)
+
+In addition to the dependencies above, RADTE needs an output from a phylogeny reconciliation program. Currently, **NOTUNG** and **GeneRax** are supported.
+* [NOTUNG](http://www.cs.cmu.edu/~durand/Notung/)
+* [GeneRax](https://github.com/BenoitMorel/GeneRax)
 
 ## Installation
-After installing the above dependencies, please download the `radte` script by, for example, `svn`, and change the file permission.
+After installing the above dependencies, please download the `radte.r` script by, for example, `git` or `svn`, and change the file permission. You can also download a zipped repository by `Clone or dowonload` above.
 ```
-svn export https://github.com/kfuku52/RADTE/trunk/radte
-chmod +x ./radte
+# With git
+git clone https://github.com/kfuku52/RADTE
+cd RADTE
+
+# With svn
+svn export https://github.com/kfuku52/RADTE/trunk/radte.r
+chmod +x ./radte.r
 ```
 
 ## Options
@@ -30,7 +37,7 @@ chmod +x ./radte
 Species tree with estimated divergence time.
 Leaves (species) should be labeled as `GENUS_SPECIES` (e.g., Homo_sapiens).
 The tree is expected to be ultrametric and branch lengths should represent evolutionary time (e.g., million years).
-Internal nodes must be uniquely labeled and the same file should be consistently used for **NOTUNG** and **RADTE**.
+Internal nodes must be uniquely labeled and the same file should be consistently used for **NOTUNG/GeneRax** and **RADTE**.
 Don't know how to label internal nodes? Try this R one-liner.
 ```
 R -q -e "library(ape); t=read.tree('species_tree_noLabel.nwk'); \
@@ -38,21 +45,22 @@ t[['node.label']]=paste0('s',1:(length(t[['tip.label']])-1)); \
 write.tree(t, 'species_tree.nwk')"
 ```
 #### `--gene_tree`
-Leaves (genes) should be labeled as `GENUS_SPECIES_GENEID` (e.g., Homo_sapiens_ENSG00000102144). The tree is expected to be non-ultrametric and branch lengths should represent substitutions per site. 
+Rooted newick tree. Leaves (genes) should be labeled as `GENUS_SPECIES_GENEID` (e.g., Homo_sapiens_ENSG00000102144). The tree is expected to be non-ultrametric and branch lengths should represent substitutions per site. 
 Use the tree that **NOTUNG** produces because its internal nodes are correctly labeled in accordance with the **NOTUNG parsable file**, another input for this program.
 #### `--notung_parsable`
-This program uses an output file from **NOTUNG** (tested with version 2.9) to acquire the species–gene relationships in phylogeny reconciliation.
-See **Examples** for details.
+An output file from **NOTUNG** (tested with version 2.9) can be used to acquire the species–gene relationships in phylogeny reconciliation. See **Examples** for details.
+#### `--generax_nhx`
+Instead of the **NOTUNG** output, the NHX tree from **GeneRax** can also be used as an input. If specified, `--gene_tree` and `--notung_parsable` will be ignored. See **Examples** for details.
 #### `--max_age`
-If duplication nodes are deeper than the root node of the species tree, this value will be used as an upper limit.
+If duplication nodes are deeper than the root node of the species tree, this value will be used as an upper limit of the root node.
 #### `--chronos_lambda`
-See `chronos` in the [**ape** documentation](https://www.rdocumentation.org/packages/ape/versions/5.2/topics/chronos).
+Passed to `chronos` for divergence time estimation. See `chronos` in the [**ape** documentation](https://www.rdocumentation.org/packages/ape/versions/5.2/topics/chronos).
 #### `--chronos_model`
-See `chronos` in the [**ape** documentation](https://www.rdocumentation.org/packages/ape/versions/5.2/topics/chronos).
+Passed to `chronos` for divergence time estimation. See `chronos` in the [**ape** documentation](https://www.rdocumentation.org/packages/ape/versions/5.2/topics/chronos).
 #### `--pad_short_edge`
-Prohibit dated branches shorter than this value. If detected, the branch length is readjusted by transferring a certain branch length from the parent branch.
+Prohibit dated branches shorter than this value. If detected, the branch length is readjusted by transferring a small portion of branch length from the parent branch.
 
-## Examples
+## Example 1: RADTE after NOTUNG
 ```
 # Run NOTUNG in the reconciliation mode
 # Don't forget to specify --parsable
@@ -69,7 +77,7 @@ java -jar -Xmx2g Notung-2.9.jar \
 --outputdir .
 
 # Run RADTE
-./radte \
+./radte.r \
 --species_tree=species_tree.nwk \
 --gene_tree=gene_tree_input.nwk.reconciled \
 --notung_parsable=gene_tree_input.nwk.reconciled.parsable.txt \
@@ -79,25 +87,34 @@ java -jar -Xmx2g Notung-2.9.jar \
 --pad_short_edge=0.001
 ```
 #### species_tree.nwk
-![](img/radte_species_tree.svg)
+![](img/notung_radte_species_tree.svg)
 
-#### gene_tree_input.nwk
-![](img/radte_gene_tree_input.svg)
+#### gene_tree_input.nwk.reconciled
+![](img/notung_radte_gene_tree_input.svg)
 
 #### gene_tree_output.nwk
-![](img/radte_gene_tree_output.svg)
+![](img/notung_radte_gene_tree_output.svg)
 
-## Example for GeneRax output files
+## Example 2: RADTE after GeneRax
 ```
-./radte \
+./radte.r \
 --species_tree=species_tree.nwk \
---generax_nhx=gene_tree.nhx \
+--generax_nhx=gene_tree_input.nhx \
 --max_age=1000 \
 --chronos_lambda=1 \
 --chronos_model=discrete \
 --pad_short_edge=0.001
-
 ```
+
+#### species_tree.nwk
+![](img/generax_radte_species_tree.svg)
+
+#### gene_tree_input.nhx
+![](img/generax_radte_gene_tree_input.svg)
+
+#### gene_tree_output.nwk
+![](img/generax_radte_gene_tree_output.svg)
+
 
 ## Citation
 Fukushima K, Pollock DD. (2019) Organ-specific propensity drives patterns of gene expression evolution. bioRxiv 409888 ([DOI: 10.1101/409888](https://www.biorxiv.org/content/10.1101/409888v2))
