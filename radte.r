@@ -20,7 +20,7 @@ if (run_mode=='batch') {
         args[['notung_parsable']] = ""
     }
     if (test_type=='generax') {
-        dir_work = '/Users/kef74yk/Dropbox_p/repos/RADTE/data/GH3/'
+        dir_work = '/Users/kef74yk/Dropbox_p/repos/RADTE/data/TPC1/'
         setwd(dir_work)
         args[['species_tree']] = paste0(dir_work, "species_tree.nwk")
         args[['generax_nhx']] = paste0(dir_work, "gene_tree.nhx")
@@ -53,6 +53,10 @@ if (all(is.na(sp_tree$node.label))) {
     sp_tree
 } else {
     sp_tree[['node.label']] = sub('PLACEHOLDER', '', sp_tree[['node.label']])
+}
+if (length(args[['pad_short_edge']])) {
+    sp_tree = rkftools::pad_short_edges(sp_tree, threshold=args[['pad_short_edge']], external_only=FALSE)
+    sp_tree = rkftools::force_ultrametric(sp_tree, stop_if_larger_change=0.01)
 }
 root_depth = max(node.depth.edgelength(sp_tree))
 sp_node_ages = abs(node.depth.edgelength(sp_tree) - root_depth)
@@ -207,19 +211,21 @@ for (gn_node_num in gn_node_table[['gn_node_num']]) {
     ancestor_upper = min(gn_node_table[(gn_node_table[['gn_node_num']]%in%ancestor_nums),'upper_age'])
     is_same_constraint = (child_lower>=ancestor_lower) & (child_upper>=ancestor_upper)
     is_same_constraint = ifelse(length(is_same_constraint)==0, FALSE, is_same_constraint)
-    is_extant = (child_lower==0)&(child_upper==0)
-    if (is_same_constraint|is_extant) {
+    if (is_same_constraint) {
         droppable_nodes = c(droppable_nodes, gn_node_num)
         gn_node_name = rkftools::get_node_name_by_num(gn_tree, gn_node_num)
         if (is_same_constraint) {
             cat_text = 'calibration node removed because of the constraint identical to or greater than one of the upper node:'
-        } else if (is_extant) {
-            cat_text = 'calibration node removed because of the extant taxon:'
         }
         cat(cat_text, 'name =', gn_node_name, 'num =', gn_node_num, '\n')
     }
 }
 gn_node_table_dropped = gn_node_table[(!gn_node_table[['gn_node_num']] %in% droppable_nodes), ]
+gn_node_table_dropped = gn_node_table_dropped[(gn_node_table_dropped[,'gn_node_num']>ape::Ntip(gn_tree)),] # Drop leaves
+num_constrained_speciation = sum(grepl('^S', gn_node_table_dropped[,'event']))
+num_constrained_duplication = sum(grepl('^D', gn_node_table_dropped[,'event']))
+cat('Number of constrained speciation nodes:', num_constrained_speciation, '\n')
+cat('Number of constrained duplication nodes:', num_constrained_duplication, '\n')
 
 # Calibration table
 calibration_table = data.frame(
@@ -296,7 +302,15 @@ if (all(gn_node_table$lower_age==gn_node_table$upper_age)) {
             calibrated_node = cn
             cat("chronos, calibrated nodes:", calibrated_node, '\n')
             current_calibration_table = calibration_tables[[calibrated_node]]
-            chronos_out = try(chronos(gn_tree, lambda=chronos_lambda, model=chronos_model, calibration=current_calibration_table, control=chronos_control))
+            chronos_out = try(
+                chronos(
+                    gn_tree, 
+                    lambda=chronos_lambda, 
+                    model=chronos_model, 
+                    calibration=current_calibration_table, 
+                    control=chronos_control
+                )
+            )
         }
     }
 }
@@ -348,6 +362,8 @@ if ("try-error" %in% class(chronos_out)) {
     cat('Tree height:', max(ape::node.depth.edgelength(sp_tree)), 'million years', '\n')
     cat('Completed: RADTE divergence time estimation', '\n')
 }
+
+
 
 
 

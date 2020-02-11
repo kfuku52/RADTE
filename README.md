@@ -83,7 +83,7 @@ java -jar -Xmx2g Notung-2.9.jar \
 --notung_parsable=gene_tree_input.nwk.reconciled.parsable.txt \
 --max_age=1000 \
 --chronos_lambda=1 \
---chronos_model=discrete \
+--chronos_model=difscrete \
 --pad_short_edge=0.001
 ```
 #### species_tree.nwk
