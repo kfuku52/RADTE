@@ -41,7 +41,7 @@ Internal nodes must be uniquely labeled and the same file should be consistently
 Don't know how to label internal nodes? Try this R one-liner.
 ```
 R -q -e "library(ape); t=read.tree('species_tree_noLabel.nwk'); \
-t[['node.label']]=paste0('s',1:(length(t[['tip.label']])-1)); \
+t[['node.label']]=paste0('s',1:Nnode(t)); \
 write.tree(t, 'species_tree.nwk')"
 ```
 #### `--gene_tree`
