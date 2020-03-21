@@ -115,6 +115,8 @@ java -jar -Xmx2g Notung-2.9.jar \
 #### gene_tree_output.nwk
 ![](img/generax_radte_gene_tree_output.svg)
 
+## Update
+Although the above tree images are not painted, the latest version of RADTE generates pdf files in which branches are colored. Red means the branches connected to the unconstrained nodes, whereas blue indicates the branches connected to the constrained nodes.
 
 ## Citation
 Fukushima K, Pollock DD. (2019) Organ-specific propensity drives patterns of gene expression evolution. bioRxiv 409888 ([DOI: 10.1101/409888](https://www.biorxiv.org/content/10.1101/409888v2))
