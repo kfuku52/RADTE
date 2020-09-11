@@ -12,7 +12,7 @@ if (run_mode=='batch') {
     test_type = 'generax'
     args = list()
     args[['max_age']] = 1000
-    args[['chronos_lambda']] = 0
+    args[['chronos_lambda']] = 1
     args[['chronos_model']] = 'discrete'
     args[['pad_short_edge']] = 0.001
     if (test_type=='notung') {
@@ -20,10 +20,12 @@ if (run_mode=='batch') {
         args[['notung_parsable']] = ""
     }
     if (test_type=='generax') {
-        dir_work = '/Users/kef74yk/Dropbox_p/repos/RADTE/data/OG0000011/'
+        dir_work = '/Users/kef74yk/Downloads/'
         setwd(dir_work)
-        args[['species_tree']] = paste0(dir_work, "species_tree.nwk")
-        args[['generax_nhx']] = paste0(dir_work, "gene_tree.nhx")
+        args[['species_tree']] = '/Users/kef74yk/Dropbox (Personal)/repos/gfe_pipeline/gfe_data/species_tree/dated_species_tree.pruned.nwk'
+        args[['generax_nhx']] = '/Users/kef74yk/Downloads/orthogroup/generax.tree/OG0000002.generax.nhx'
+        #args[['species_tree']] = paste0(dir_work, "species_tree.nwk")
+        #args[['generax_nhx']] = paste0(dir_work, "gene_tree.nhx")
     }
 }
 
@@ -93,7 +95,7 @@ if (mode=='generax') {
     gn_tree = nhxtree@phylo
     
     cols = c('event', 'gn_node', 'gn_node_num', 'lower_sp_node', 'upper_sp_node', 'lower_age', 'upper_age')
-    gn_node_table = nhxtree@data
+    gn_node_table = data.frame(nhxtree@data, stringsAsFactors=FALSE)
     gn_node_table[,'event'] = 'S'
     gn_node_table[is.na(gn_node_table[['D']]),'D'] = 'N'
     gn_node_table[(gn_node_table[['D']]=='Y'),'event'] = 'D'
@@ -116,7 +118,7 @@ if (mode=='generax') {
     gn_node_table[,'lower_age'] = NA
     gn_node_table[,'upper_age'] = NA
     for (sp_node in sp_node_table[['node']]) {
-        node_age = sp_node_table[(sp_node_table[['node']]==sp_node),'age']
+        node_age = as.numeric(sp_node_table[(sp_node_table[['node']]==sp_node),'age'])
         conditions = (gn_node_table[['lower_sp_node']]==sp_node)
         conditions = conditions & (gn_node_table[['upper_sp_node']]==sp_node)
         conditions[is.na(conditions)] = FALSE

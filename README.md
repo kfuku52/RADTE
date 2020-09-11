@@ -119,7 +119,7 @@ java -jar -Xmx2g Notung-2.9.jar \
 Although the above tree images are not painted, the latest version of RADTE generates pdf files in which branches are colored. Red means the branches connected to the unconstrained nodes, whereas blue indicates the branches connected to the constrained nodes.
 
 ## Citation
-Fukushima K, Pollock DD. (2019) Organ-specific propensity drives patterns of gene expression evolution. bioRxiv 409888 ([DOI: 10.1101/409888](https://www.biorxiv.org/content/10.1101/409888v2))
+Fukushima K, Pollock DD. 2020. Amalgamated cross-species transcriptomes reveal organ-specific propensity in gene expression evolution. **Nature Communications 11**: 4459 ([DOI: 10.1038/s41467-020-18090-8]( https://doi.org/10.1038/s41467-020-18090-8 ))
 
 ## Licensing
 This program is BSD-licensed (3 clause). See [LICENSE](LICENSE) for details.
