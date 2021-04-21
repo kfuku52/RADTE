@@ -9,7 +9,8 @@ if (run_mode=='batch') {
     args = commandArgs(trailingOnly=TRUE)
     args = rkftools::get_parsed_args(args, print=TRUE)
 } else if (run_mode=='debug') {
-    test_type = 'generax'
+    #test_type = 'generax'
+    test_type = 'notung'
     args = list()
     args[['max_age']] = 1000
     args[['chronos_lambda']] = 1
@@ -26,6 +27,10 @@ if (run_mode=='batch') {
         args[['generax_nhx']] = '/Users/kef74yk/Downloads/orthogroup/generax.tree/OG0000002.generax.nhx'
         #args[['species_tree']] = paste0(dir_work, "species_tree.nwk")
         #args[['generax_nhx']] = paste0(dir_work, "gene_tree.nhx")
+    } else if (test_type=='notung') {
+        args[['species_tree']] = '/Users/kef74yk/Dropbox (Personal)/repos/RADTE/data/issue_3/species_tree.nwk'
+        args[['gene_tree']] = '/Users/kef74yk/Dropbox (Personal)/repos/RADTE/data/issue_3/gene_tree_input.nwk.reconciled'
+        args[['notung_parsable']] = '/Users/kef74yk/Dropbox (Personal)/repos/RADTE/data/issue_3/gene_tree_input.nwk.reconciled.parsable.txt'
     }
 }
 
@@ -55,6 +60,8 @@ if (all(is.na(sp_tree$node.label))) {
 } else {
     sp_tree[['node.label']] = sub('PLACEHOLDER', '', sp_tree[['node.label']])
 }
+has_nolabel = any(sp_tree[['node.label']]=='')
+if (has_nolabel) { stop('Input species tree contains non-labeled node(s).') }
 if (length(args[['pad_short_edge']])) {
     sp_tree = rkftools::pad_short_edges(sp_tree, threshold=args[['pad_short_edge']], external_only=FALSE)
 }
@@ -62,7 +69,7 @@ sp_tree = rkftools::force_ultrametric(sp_tree, stop_if_larger_change=0.01)
 root_depth = max(node.depth.edgelength(sp_tree))
 sp_node_ages = abs(node.depth.edgelength(sp_tree) - root_depth)
 sp_node_names = c(sp_tree$tip.label, sp_tree$node.label)
-sp_node_table = data.frame(node=sp_node_names, age=sp_node_ages, spp=NA)
+sp_node_table = data.frame(node=sp_node_names, age=sp_node_ages, spp=NA, stringsAsFactors=FALSE)
 for (sp_sub in ape::subtrees(sp_tree)) {
     subroot_node = sp_sub[['node.label']][1]
     sp_node_table[(sp_node_table$node==subroot_node),'spp'] = paste(sp_sub[['tip.label']], collapse=',')
@@ -157,14 +164,15 @@ if (mode=='notung') {
         root_node = gn_sub$node.label[1]
         if (! root_node %in% gn_node_table$gn_node) {
             root_num = rkftools::get_node_num_by_name(gn_tree, root_node)
-            node_spp = c()
-            for (gn_gene in gn_sub$tip.label) {
-                pos_underbar = gregexpr("_", gn_gene)[[1]]
-                node_sp = substring(gn_gene, 1, pos_underbar[length(pos_underbar)]-1)
-                node_spp = c(node_spp, node_sp)
+            node_spp = unique(rkftools::leaf2species(gn_sub[['tip.label']]))
+            node_spp = sub(' ', '_', node_spp)
+            is_spnode_species = TRUE
+            for (node_sp in node_spp) {
+                is_spnode_species = is_spnode_species & grepl(node_sp, sp_node_table$spp)    
             }
-            node_age = min(sp_node_table$age[sapply(sp_node_table$spp, function(x){all(node_spp %in% x)})])
-            sp_node = sp_node_table$node[sp_node_table$age==node_age]
+            node_age = min(sp_node_table[is_spnode_species,'age'])
+            is_min = (sp_node_table[,'age']==node_age)
+            sp_node = sp_node_table[is_min&is_spnode_species,'node']
             ind = nrow(gn_node_table)+1
             gn_node_table[ind,'event'] = "S"
             gn_node_table[ind,'gn_node'] = root_node
