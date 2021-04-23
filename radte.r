@@ -28,9 +28,11 @@ if (run_mode=='batch') {
         #args[['species_tree']] = paste0(dir_work, "species_tree.nwk")
         #args[['generax_nhx']] = paste0(dir_work, "gene_tree.nhx")
     } else if (test_type=='notung') {
-        args[['species_tree']] = '/Users/kef74yk/Dropbox (Personal)/repos/RADTE/data/issue_3/species_tree.nwk'
-        args[['gene_tree']] = '/Users/kef74yk/Dropbox (Personal)/repos/RADTE/data/issue_3/gene_tree_input.nwk.reconciled'
-        args[['notung_parsable']] = '/Users/kef74yk/Dropbox (Personal)/repos/RADTE/data/issue_3/gene_tree_input.nwk.reconciled.parsable.txt'
+        work_dir = '/Users/kef74yk/Dropbox (Personal)/repos/RADTE/data/issue_4_2'
+        setwd(work_dir)
+        args[['species_tree']] = file.path(work_dir, 'species_tree.nwk')
+        args[['gene_tree']] = file.path(work_dir, 'gene_tree.reconciled')
+        args[['notung_parsable']] = file.path(work_dir, 'gene_tree.parsable.txt')
     }
 }
 
@@ -136,6 +138,14 @@ if (mode=='generax') {
     gn_node_table = data.frame(gn_node_table[,cols], stringsAsFactors=FALSE)
 }
 
+check_gn_node_name_uniqueness = function(gn_node_table, gn_tree)
+for (gn_node_name in gn_node_table[,'gn_node']) {
+    n = rkftools::get_node_num_by_name(gn_tree, gn_node_name)
+    if (!length(n)==1) {
+        stop(paste('Input gene tree contains multiple nodes with the identical name:', gn_node_name))
+    }
+}
+
 if (mode=='notung') {
     cat('Reading NOTUNG tree.\n')
     gn_tree = read.tree(gn_file)
@@ -143,10 +153,9 @@ if (mode=='notung') {
 
     gn_node_table = read_notung_parsable(file=parsable_file, mode='D')
     gn_node_table = merge(gn_node_table, data.frame(lower_age=NA, upper_age=NA, spp=NA), all=TRUE)
+    check_gn_node_name_uniqueness(gn_node_table, gn_tree)
     if (nrow(gn_node_table) > 0) {
-        print(gn_node_table[,'gn_node'])
         gn_node_nums = sapply(gn_node_table[,'gn_node'], function(x){rkftools::get_node_num_by_name(gn_tree, x)})
-        print(str(gn_node_nums))
         gn_node_table$gn_node_num = gn_node_nums
         for (i in 1:nrow(gn_node_table)) {
             if (any(sp_node_table$node==gn_node_table$lower_sp_node[i])) {
@@ -159,7 +168,7 @@ if (mode=='notung') {
     } else {
         gn_node_table = gn_node_table[0,]
     }
-
+    
     for (gn_sub in ape::subtrees(gn_tree)) {
         root_node = gn_sub$node.label[1]
         if (! root_node %in% gn_node_table$gn_node) {

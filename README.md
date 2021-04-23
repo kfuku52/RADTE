@@ -11,7 +11,7 @@ If the estimation fails, the constraints are gradually relaxed until successful 
 ![](img/radte_method.svg)
 
 ## Dependency
-* [R 3.x](https://www.r-project.org/)
+* [R](https://www.r-project.org/): Started developing with 3.5 and currently tested with 4.0.
 * [ape](http://ape-package.ird.fr/)
 * [treeio](https://github.com/YuLab-SMU/treeio)
 * [rkftools](https://github.com/kfuku52/rkftools)
