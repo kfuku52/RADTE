@@ -2,6 +2,42 @@
 library(ape)
 library(rkftools)
 
+check_gn_node_name_uniqueness = function(gn_node_table, gn_tree)
+for (gn_node_name in gn_node_table[,'gn_node']) {
+    n = rkftools::get_node_num_by_name(gn_tree, gn_node_name)
+    if (!length(n)==1) {
+        stop(paste('Input gene tree contains multiple nodes with the identical name:', gn_node_name))
+    }
+}
+    
+pad_zero_branch_length = function(tree, pad_size=1e-6) {
+  is_bl_zero = (tree[['edge.length']]<=0)
+    if (any(is_bl_zero)) {
+        txt = paste0(sum(is_bl_zero), ' out of ', length(is_bl_zero))
+        txt = paste0(txt, ' branches have zero or negative length. Padding with ', pad_size, '.\n')
+        cat(txt)
+        tree[['edge.length']][is_bl_zero] = pad_size
+    }
+    return(tree)
+}
+
+adjust_branch_length_order = function(tree, min_bl=1e-6) {
+    is_bl_zero = (tree[['edge.length']]<=0)
+    if (any(is_bl_zero)) {
+        stop('The tree contains branch(es) with zero or negative length.')
+    }
+    min_tree_bl = min(tree[['edge.length']])
+    for (i in 1:20) {
+        if (min_tree_bl<min_bl) {
+            tree[['edge.length']] = tree[['edge.length']] * 10
+            min_tree_bl =  min(tree[['edge.length']])
+        } else {
+            break
+        }
+    }
+    return(tree)
+}
+
 run_mode = ifelse(length(commandArgs(trailingOnly=TRUE))==1, 'debug', 'batch')
 cat('RADTE run_mode:', run_mode, '\n')
 if (run_mode=='batch') {
@@ -28,11 +64,13 @@ if (run_mode=='batch') {
         #args[['species_tree']] = paste0(dir_work, "species_tree.nwk")
         #args[['generax_nhx']] = paste0(dir_work, "gene_tree.nhx")
     } else if (test_type=='notung') {
-        work_dir = '/Users/kef74yk/Dropbox (Personal)/repos/RADTE/data/issue_4_2'
+        work_dir = '/Users/kef74yk/Dropbox (Personal)/repos/RADTE/data/issue_4_3'
         setwd(work_dir)
         args[['species_tree']] = file.path(work_dir, 'species_tree.nwk')
-        args[['gene_tree']] = file.path(work_dir, 'gene_tree.reconciled')
-        args[['notung_parsable']] = file.path(work_dir, 'gene_tree.parsable.txt')
+        #args[['gene_tree']] = file.path(work_dir, 'gene_tree.reconciled')
+        #args[['notung_parsable']] = file.path(work_dir, 'gene_tree.parsable.txt')
+        args[['gene_tree']] = file.path(work_dir, 'OG0001004_binary.txt.reconciled')
+        args[['notung_parsable']] = file.path(work_dir, 'OG0001004_binary.txt.reconciled.parsable.txt')        
     }
 }
 
@@ -102,6 +140,11 @@ if (mode=='generax') {
     nhxtree = read_generax_nhx(generax_file)
 
     gn_tree = nhxtree@phylo
+    if (rkftools::contains_polytomy(gn_tree)) {
+        stop('Input tree contains polytomy. A completely bifurcated tree is expected as input.')
+    }
+    gn_tree = pad_zero_branch_length(gn_tree, pad_size=args[['pad_short_edge']])
+    #gn_tree = adjust_branch_length_order(gn_tree, min_bl=args[['pad_short_edge']])
     
     cols = c('event', 'gn_node', 'gn_node_num', 'lower_sp_node', 'upper_sp_node', 'lower_age', 'upper_age')
     gn_node_table = data.frame(nhxtree@data, stringsAsFactors=FALSE)
@@ -138,18 +181,15 @@ if (mode=='generax') {
     gn_node_table = data.frame(gn_node_table[,cols], stringsAsFactors=FALSE)
 }
 
-check_gn_node_name_uniqueness = function(gn_node_table, gn_tree)
-for (gn_node_name in gn_node_table[,'gn_node']) {
-    n = rkftools::get_node_num_by_name(gn_tree, gn_node_name)
-    if (!length(n)==1) {
-        stop(paste('Input gene tree contains multiple nodes with the identical name:', gn_node_name))
-    }
-}
-
 if (mode=='notung') {
     cat('Reading NOTUNG tree.\n')
     gn_tree = read.tree(gn_file)
-    gn_tree$node.label = gsub("\\'", "",gn_tree$node.label)
+    gn_tree[['node.label']] = gsub("\\'", "",gn_tree[['node.label']])
+    if (rkftools::contains_polytomy(gn_tree)) {
+        stop('Input tree contains polytomy. A completely bifurcated tree is expected as input.')
+    }
+    gn_tree = pad_zero_branch_length(gn_tree, pad_size=args[['pad_short_edge']])
+    #gn_tree = adjust_branch_length_order(gn_tree, min_bl=args[['pad_short_edge']])
 
     gn_node_table = read_notung_parsable(file=parsable_file, mode='D')
     gn_node_table = merge(gn_node_table, data.frame(lower_age=NA, upper_age=NA, spp=NA), all=TRUE)
@@ -336,7 +376,7 @@ if (all(gn_node_table$lower_age==gn_node_table$upper_age)) {
             cat("chronos, calibrated nodes:", calibrated_node, '\n')
             current_calibration_table = calibration_tables[[calibrated_node]]
             chronos_out = try(
-                chronos(
+                ape::chronos(
                     gn_tree, 
                     lambda=chronos_lambda, 
                     model=chronos_model, 
@@ -411,5 +451,7 @@ if ("try-error" %in% class(chronos_out)) {
     cat('Tree height:', max(ape::node.depth.edgelength(sp_tree)), 'million years', '\n')
     cat('Completed: RADTE divergence time estimation', '\n')
 }
+
+
 
 
