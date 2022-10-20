@@ -1,6 +1,19 @@
 #!/usr/bin/env Rscript
+
+radte_version = '0.2.0'
+
+run_mode = ifelse(length(commandArgs(trailingOnly=TRUE))==1, 'debug', 'batch')
+#if (run_mode=='debug') install.packages("/Users/kef74yk/Dropbox (Personal)/repos/ape", repos=NULL, type="source")
+
+#devtools::install_github(repo="cran/ape", ref="master")
+
 library(ape)
 library(rkftools)
+
+cat(paste('RADTE version:', radte_version, '\n'))
+cat(paste('ape version:', packageVersion('ape'), '\n'))
+cat(paste('rkftools version:', packageVersion('rkftools'), '\n'))
+cat(paste(version[['version.string']], '\n'))
 
 check_gn_node_name_uniqueness = function(gn_node_table, gn_tree)
 for (gn_node_name in gn_node_table[,'gn_node']) {
@@ -10,11 +23,11 @@ for (gn_node_name in gn_node_table[,'gn_node']) {
     }
 }
     
-pad_zero_branch_length = function(tree, pad_size=1e-6) {
-  is_bl_zero = (tree[['edge.length']]<=0)
+pad_branch_length = function(tree, pad_size=1e-6) {
+  is_bl_zero = (tree[['edge.length']]<pad_size)
     if (any(is_bl_zero)) {
         txt = paste0(sum(is_bl_zero), ' out of ', length(is_bl_zero))
-        txt = paste0(txt, ' branches have zero or negative length. Padding with ', pad_size, '.\n')
+        txt = paste0(txt, ' branches have small length. Padding with ', pad_size, '.\n')
         cat(txt)
         tree[['edge.length']][is_bl_zero] = pad_size
     }
@@ -38,43 +51,74 @@ adjust_branch_length_order = function(tree, min_bl=1e-6) {
     return(tree)
 }
 
-run_mode = ifelse(length(commandArgs(trailingOnly=TRUE))==1, 'debug', 'batch')
+save_tree_pdf = function(phy, file, show.age=FALSE, edge_colors=list()) {
+    phy = ape::ladderize(phy)
+    if (show.age) {
+        root_depth = max(node.depth.edgelength(phy))
+        node_ages = abs(node.depth.edgelength(phy) - root_depth)
+        int_node_ages = node_ages[(length(phy$tip.label)+1):length(node_ages)]
+        phy$node.label = paste(phy$node.label, as.character(round(int_node_ages, digits=1)))
+    }
+    ec2 = rep('black', nrow(phy[['edge']]))
+    node_colors = 'black'
+    if (length(edge_colors)!=0) {
+        for (col in names(edge_colors)) {
+            ec2[(phy[['edge']][,2]%in%edge_colors[[col]])] = col
+        }
+    }
+    if (length(edge_colors)!=0) { # Should not be merged to the previous if block
+        is_node = (phy[['edge']][,2]>length(phy[['tip.label']]))
+        node_order = order(phy[['edge']][,2][is_node])
+        node_colors = ec2[is_node][node_order]
+        root_num = rkftools::get_root_num(phy)
+        for (col in names(edge_colors)) {
+            if (root_num %in% edge_colors[[col]]) {
+                node_colors = c(col, node_colors) # Adding root
+                break
+            }
+        }
+    }
+    pdf(file, height=max(3, length(phy$tip.label)/5+1), width=7.2)
+    plot(phy, show.node.label=FALSE, show.tip.label=TRUE, cex=0.5, label.offset=0, 
+         edge.color='black', root.edge=TRUE)
+    nodelabels(text=phy[['node.label']], col=node_colors, bg='white', cex=0.5)
+    invisible(dev.off())
+}
+
+
 cat('RADTE run_mode:', run_mode, '\n')
 if (run_mode=='batch') {
     cat('arguments:\n')
     args = commandArgs(trailingOnly=TRUE)
     args = rkftools::get_parsed_args(args, print=TRUE)
 } else if (run_mode=='debug') {
-    #test_type = 'generax'
-    test_type = 'notung'
+    test_type = 'generax'
+    #test_type = 'notung'
     args = list()
     args[['max_age']] = 1000
     args[['chronos_lambda']] = 1
     args[['chronos_model']] = 'discrete'
     args[['pad_short_edge']] = 0.001
     if (test_type=='notung') {
-        args[['species_tree']] = "/Users/kef74yk/Dropbox_p/repos/RADTE/data/phyloxml1/input/dated_species_tree.generax.nwk"
-        args[['notung_parsable']] = ""
-    }
-    if (test_type=='generax') {
-        dir_work = '/Users/kef74yk/Downloads/'
-        setwd(dir_work)
-        args[['species_tree']] = '/Users/kef74yk/Dropbox (Personal)/repos/gfe_pipeline/gfe_data/species_tree/dated_species_tree.pruned.nwk'
-        args[['generax_nhx']] = '/Users/kef74yk/Downloads/orthogroup/generax.tree/OG0000002.generax.nhx'
-        #args[['species_tree']] = paste0(dir_work, "species_tree.nwk")
-        #args[['generax_nhx']] = paste0(dir_work, "gene_tree.nhx")
-    } else if (test_type=='notung') {
-        work_dir = '/Users/kef74yk/Dropbox (Personal)/repos/RADTE/data/issue_4_3'
+        work_dir = '/Users/kef74yk/Dropbox/repos/RADTE/data/example_notung_01'
         setwd(work_dir)
         args[['species_tree']] = file.path(work_dir, 'species_tree.nwk')
         #args[['gene_tree']] = file.path(work_dir, 'gene_tree.reconciled')
         #args[['notung_parsable']] = file.path(work_dir, 'gene_tree.parsable.txt')
-        args[['gene_tree']] = file.path(work_dir, 'OG0001004_binary.txt.reconciled')
-        args[['notung_parsable']] = file.path(work_dir, 'OG0001004_binary.txt.reconciled.parsable.txt')        
+        args[['gene_tree']] = file.path(work_dir, 'gene_tree.nwk.reconciled')
+        args[['notung_parsable']] = file.path(work_dir, 'gene_tree.nwk.reconciled.parsable.txt')        
+    }
+    if (test_type=='generax') {
+        work_dir = '/Volumes/kfT7/Dropbox/repos/RADTE/data/example_generax_01'
+        setwd(work_dir)
+        args[['species_tree']] = file.path(work_dir, 'species_tree.nwk')
+        args[['generax_nhx']] = file.path(work_dir, 'gene_tree.nhx')
     }
 }
 
-if ('generax_nhx' %in% names(args)) {
+if (('generax_nhx' %in% names(args))&('notung_parsable' %in% names(args))) {
+    stop('Only one of --notung_parsable and --generax_nhx should be specified. Exiting.\n')
+} else if ('generax_nhx' %in% names(args)) {
     cat('--generax_nhx was detected. GeneRax mode.', '\n')
     mode = 'generax'
     generax_file = args[['generax_nhx']]
@@ -86,6 +130,7 @@ if ('generax_nhx' %in% names(args)) {
 } else {
     stop('--notung_parsable or --generax_nhx should be specified. Exiting.\n')
 }
+
 sp_file = args[['species_tree']]
 max_age = as.numeric(args[['max_age']])
 chronos_lambda = as.numeric(args[['chronos_lambda']])
@@ -101,7 +146,7 @@ if (all(is.na(sp_tree$node.label))) {
     sp_tree[['node.label']] = sub('PLACEHOLDER', '', sp_tree[['node.label']])
 }
 has_nolabel = any(sp_tree[['node.label']]=='')
-if (has_nolabel) { stop('Input species tree contains non-labeled node(s).') }
+if (has_nolabel) { stop('Please make sure to label all nodes in the input species tree, including the root node.') }
 if (length(args[['pad_short_edge']])) {
     sp_tree = rkftools::pad_short_edges(sp_tree, threshold=args[['pad_short_edge']], external_only=FALSE)
 }
@@ -143,9 +188,9 @@ if (mode=='generax') {
     if (rkftools::contains_polytomy(gn_tree)) {
         stop('Input tree contains polytomy. A completely bifurcated tree is expected as input.')
     }
-    gn_tree = pad_zero_branch_length(gn_tree, pad_size=args[['pad_short_edge']])
+    gn_tree = pad_branch_length(gn_tree, pad_size=args[['pad_short_edge']])
     #gn_tree = adjust_branch_length_order(gn_tree, min_bl=args[['pad_short_edge']])
-    
+    cat('Minimum branch length in gene tree:', min(gn_tree[['edge.length']]), '\n')    
     cols = c('event', 'gn_node', 'gn_node_num', 'lower_sp_node', 'upper_sp_node', 'lower_age', 'upper_age')
     gn_node_table = data.frame(nhxtree@data, stringsAsFactors=FALSE)
     gn_node_table[,'event'] = 'S'
@@ -153,8 +198,8 @@ if (mode=='generax') {
     gn_node_table[(gn_node_table[['D']]=='Y'),'event'] = 'D'
     colnames(gn_node_table) = sub('^S$', 'lower_sp_node', colnames(gn_node_table))
     gn_node_table[,'upper_sp_node'] = gn_node_table[['lower_sp_node']]
+    gn_node_table = gn_node_table[order(gn_node_table[['node']]),]
     gn_node_table[,'gn_node'] = c(gn_tree[['tip.label']], gn_tree[['node.label']])
-    #gn_node_table = gn_node_table[(gn_node_table[['gn_node']]!='root'),] ### Remove root node
     gn_node_table[(gn_node_table[['event']]=='D'),'upper_sp_node'] = NA
     for (sp_node in unique(gn_node_table[['lower_sp_node']])) {
         node_num = rkftools::get_node_num_by_name(sp_tree, sp_node)
@@ -179,17 +224,14 @@ if (mode=='generax') {
     }
     gn_node_table[,'gn_node_num'] = rkftools::get_node_num_by_name(gn_tree, gn_node_table[['gn_node']])
     gn_node_table = data.frame(gn_node_table[,cols], stringsAsFactors=FALSE)
-}
-
-if (mode=='notung') {
+} else if (mode=='notung') {
     cat('Reading NOTUNG tree.\n')
     gn_tree = read.tree(gn_file)
     gn_tree[['node.label']] = gsub("\\'", "",gn_tree[['node.label']])
     if (rkftools::contains_polytomy(gn_tree)) {
         stop('Input tree contains polytomy. A completely bifurcated tree is expected as input.')
     }
-    gn_tree = pad_zero_branch_length(gn_tree, pad_size=args[['pad_short_edge']])
-    #gn_tree = adjust_branch_length_order(gn_tree, min_bl=args[['pad_short_edge']])
+    gn_tree = pad_branch_length(gn_tree, pad_size=args[['pad_short_edge']])
 
     gn_node_table = read_notung_parsable(file=parsable_file, mode='D')
     gn_node_table = merge(gn_node_table, data.frame(lower_age=NA, upper_age=NA, spp=NA), all=TRUE)
@@ -234,6 +276,10 @@ if (mode=='notung') {
         }
     }
 }
+
+if (run_mode=='debug') {
+    save_tree_pdf(phy=gn_tree, file="radte_gene_tree_input_debug.pdf", show.age=FALSE)
+}
 cat('End: gene tree processing', '\n\n')
 
 # Calibration node check
@@ -267,7 +313,12 @@ if ((sum(gn_node_table[['event']]=="D") > 0)&(any(is.na(gn_node_table[['upper_ag
     gn_node_table$upper_age[is_upper_na] = divtime_max
 }
 root_num = rkftools::get_root_num(gn_tree)
-gn_node_table[(gn_node_table$gn_node_num==root_num),'event'] = paste0(gn_node_table[(gn_node_table$gn_node_num==root_num),'event'], '(R)')
+if (!endsWith(gn_node_table[(gn_node_table$gn_node_num==root_num),'event'], 'R')) {
+    gn_node_table[(gn_node_table$gn_node_num==root_num),'event'] = paste0(gn_node_table[(gn_node_table$gn_node_num==root_num),'event'], '(R)')
+}
+if (run_mode=='debug') {
+    write.table(gn_node_table, file='gn_node_table.debug.tsv', sep='\t', row.names=FALSE)
+}
 
 droppable_nodes = c()
 flag_first = TRUE
@@ -310,14 +361,6 @@ calibration_table = data.frame(
 )
 
 calibration_table_R = calibration_table[(calibration_table$node==root_num),]
-
-if ("D" %in% gn_node_table_dropped$event) {
-    D_nodes = gn_node_table_dropped[(gn_node_table_dropped$event=='D'),'gn_node_num']
-    calibration_table_D = calibration_table[calibration_table$node %in% D_nodes,]
-} else {
-    calibration_table_D = NA
-}
-
 if ("S" %in% gn_node_table_dropped$event) {
     S_nodes = gn_node_table_dropped[(gn_node_table_dropped$event=='S'),'gn_node_num']
     calibration_table_S = calibration_table[calibration_table$node %in% S_nodes,]
@@ -326,11 +369,8 @@ if ("S" %in% gn_node_table_dropped$event) {
 }
 
 calibration_tables = list(
-    'RDS' = calibration_table,
     'RS' = rbind(calibration_table_R, calibration_table_S),
-    'RD' = rbind(calibration_table_R, calibration_table_D),
     'S' = calibration_table_S,
-    'D' = calibration_table_D,
     'R' = calibration_table_R
 )
 
@@ -370,14 +410,14 @@ if (all(gn_node_table$lower_age==gn_node_table$upper_age)) {
     # Gene tree with duplication nodes
     chronos_out = 'PLACEHOLDER'
     class(chronos_out) = 'try-error'
-    for (cn in c('RDS','RS','RD','S','D','R')) {
+    for (cn in c('RS','S','R')) {
         if ("try-error" %in% class(chronos_out)) {
-            calibrated_node = cn
-            cat("chronos, calibrated nodes:", calibrated_node, '\n')
-            current_calibration_table = calibration_tables[[calibrated_node]]
+            calibrated_node = cn # This is used in the next block
+            current_calibration_table = calibration_tables[[cn]] # This is used in the next block
+            cat("\nchronos, calibrated nodes:", cn, '\n')
             chronos_out = try(
-                ape::chronos(
-                    gn_tree, 
+                chronos(
+                    phy=gn_tree, 
                     lambda=chronos_lambda, 
                     model=chronos_model, 
                     calibration=current_calibration_table, 
@@ -386,25 +426,6 @@ if (all(gn_node_table$lower_age==gn_node_table$upper_age)) {
             )
         }
     }
-}
-
-save_tree_pdf = function(phy, file, show.age=FALSE, edge_colors=list()) {
-    phy = ape::ladderize(phy)
-    if (show.age) {
-        root_depth = max(node.depth.edgelength(phy))
-        node_ages = abs(node.depth.edgelength(phy) - root_depth)
-        int_node_ages = node_ages[(length(phy$tip.label)+1):length(node_ages)]
-        phy$node.label = paste(phy$node.label, as.character(round(int_node_ages, digits=1)))
-    }
-    ec = rep('black', nrow(phy[['edge']]))
-    if (length(edge_colors)!=0) {
-        for (col in names(edge_colors)) {
-            ec[(phy[['edge']][,2]%in%edge_colors[[col]])] = col
-        }
-    }
-    pdf(file, height=max(3, length(phy$tip.label)/5+1), width=7.2)
-    plot(phy, show.node.label=TRUE, show.tip.label=TRUE, cex=0.5, label.offset=0, edge.color=ec)
-    invisible(dev.off())
 }
 
 if ("try-error" %in% class(chronos_out)) {
@@ -442,16 +463,19 @@ if ("try-error" %in% class(chronos_out)) {
     sp_node_table$spp = NULL
     write.table(sp_node_table, file='radte_species_tree.tsv', sep='\t', quote=FALSE, row.names=FALSE)
     
-    ec = list('red'=droppable_nodes, 'blue'=current_calibration_table[['node']])
+    node_nums = (length(chronos_out2[['tip.label']])+1):max(chronos_out2[['edge']])
+    noncalibrated_nodes = node_nums[!node_nums %in% current_calibration_table[['node']]]
+    ec = list('red'=noncalibrated_nodes, 'blue'=current_calibration_table[['node']])
     save_tree_pdf(phy=gn_tree, file="radte_gene_tree_input.pdf", show.age=FALSE, edge_colors=ec)
     save_tree_pdf(phy=chronos_out2, file="radte_gene_tree_output.pdf", show.age=TRUE, edge_colors=ec)
     save_tree_pdf(phy=sp_tree, file="radte_species_tree.pdf", show.age=TRUE)
 
     cat('Calibrated nodes:', calibrated_node, '\n')
     cat('Tree height:', max(ape::node.depth.edgelength(sp_tree)), 'million years', '\n')
+    is_max_age = (calibration_table[,'age.max']==max_age)
+    num_spnode_used_for_constraint = nrow(unique(calibration_table[!is_max_age,c('age.min','age.max')]))
+    cat('Number of species tree node used for the gene tree constraint:', num_spnode_used_for_constraint, '\n')    
     cat('Completed: RADTE divergence time estimation', '\n')
 }
-
-
 
 
