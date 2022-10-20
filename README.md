@@ -1,5 +1,7 @@
+![](logo/logo_radte_large.svg)
+
 ## Overview
-**R**econciliation-**A**ssisted **D**ivergence **T**ime **E**stimation (**RADTE**) is a method to date gene trees with the aid of dated species trees.
+**R**econciliation-**A**ssisted **D**ivergence **T**ime **E**stimation (**RADTE** / [rædˈti:](http://ipa-reader.xyz/?text=r%C3%A6d%CB%88ti:&voice=Salli)) is a method to date gene trees with the aid of dated species trees.
 This program can handle a rooted gene tree containing duplication/loss events.
 The divergence time of duplication nodes are estimated while constraining speciation nodes by transferring the known or pre-estimated divergence time from the species tree to the gene tree.
 
