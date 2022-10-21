@@ -10,8 +10,8 @@ The divergence time of duplication nodes are estimated while constraining specia
 ## Dependency
 * [R](https://www.r-project.org/): Started developing with 3.5 and most recently tested with 4.1.
 * [ape](http://ape-package.ird.fr/)
-* [treeio](https://github.com/YuLab-SMU/treeio)
 * [rkftools](https://github.com/kfuku52/rkftools)
+* [treeio](https://github.com/YuLab-SMU/treeio): required for `--generax_nhx`
 
 In addition to the above dependencies, RADTE needs an output from a phylogeny reconciliation program. 
 **NOTUNG** and **GeneRax** are supported.
@@ -28,6 +28,8 @@ cd RADTE
 
 # With svn
 svn export https://github.com/kfuku52/RADTE/trunk/radte.r
+
+# Change permission
 chmod +x ./radte.r
 ```
 
@@ -152,10 +154,12 @@ This file records what types of gene tree nodes are constrained in the divergenc
 RADTE first attempts to constrain all available calibration points transferred from the species tree (**R**, root node; **S**, speciation node) for the divergence time estimation by `chronos` from the **ape** package.
 If the estimation succeeded, the content of this file should be **RS**, because both **R** and **S** nodes were used.
 If the first estimation failed, the constraints are gradually relaxed until successful estimation is obtained.
-The order of trials in version 0.2.0 and later is as follows: **RS** -> **S** -> **R**. 
+As of version 0.2.0, the order of trials is as follows: **RS** -> **S** -> **R**. 
 This differs from the method described in Fukushima and Pollock (2020), where duplication nodes (**D**) may be constrained with the upper and lower limits.
 
 ## Citation
+The prototype of RADTE is described in this publication.
+
 Fukushima K, Pollock DD. 2020. Amalgamated cross-species transcriptomes reveal organ-specific propensity in gene expression evolution. **Nature Communications 11**: 4459 ([DOI: 10.1038/s41467-020-18090-8]( https://doi.org/10.1038/s41467-020-18090-8 ))
 
 ## Licensing
