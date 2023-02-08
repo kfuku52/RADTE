@@ -10,7 +10,6 @@ The divergence time of duplication nodes are estimated while constraining specia
 ## Dependency
 * [R](https://www.r-project.org/): Started developing with 3.5 and most recently tested with 4.1.
 * [ape](http://ape-package.ird.fr/)
-* [rkftools](https://github.com/kfuku52/rkftools)
 * [treeio](https://github.com/YuLab-SMU/treeio): required for `--generax_nhx`
 
 In addition to the above dependencies, RADTE needs an output from a phylogeny reconciliation program. 

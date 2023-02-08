@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-radte_version = '0.2.0'
+radte_version = '0.2.1'
 
 run_mode = ifelse(length(commandArgs(trailingOnly=TRUE))==1, 'debug', 'batch')
 #if (run_mode=='debug') install.packages("/Users/kef74yk/Dropbox (Personal)/repos/ape", repos=NULL, type="source")
@@ -8,16 +8,229 @@ run_mode = ifelse(length(commandArgs(trailingOnly=TRUE))==1, 'debug', 'batch')
 #devtools::install_github(repo="cran/ape", ref="master")
 
 library(ape)
-library(rkftools)
 
 cat(paste('RADTE version:', radte_version, '\n'))
 cat(paste('ape version:', packageVersion('ape'), '\n'))
-cat(paste('rkftools version:', packageVersion('rkftools'), '\n'))
 cat(paste(version[['version.string']], '\n'))
+
+# copied from rkftools https://github.com/kfuku52/rkftools
+get_parsed_args = function(args, print=TRUE) {
+    split = strsplit(sub("^--", "", args), "=")
+    parsed = list()
+    for (i in 1:length(split)) {
+        param = split[[i]][1]
+        value = split[[i]][2]
+        if (!is.na(suppressWarnings(as.numeric(value)))) {
+            value = as.numeric(value)
+        }
+        parsed[[param]] = value
+    }
+    if (print) {
+        for (name in names(parsed)) {
+            cat(name, '=', parsed[[name]], '\n')
+        }
+        cat('\n')
+    }
+    return(parsed)
+}
+
+# copied from rkftools https://github.com/kfuku52/rkftools
+get_node_name_by_num = function(phy, node_num) {
+    node_names = c(phy[['tip.label']], phy$node.label)
+    node_nums = 1:length(node_names)
+    node_name = node_names[node_nums %in% node_num]
+    return(node_name)
+}
+
+# copied from rkftools https://github.com/kfuku52/rkftools
+get_node_num_by_name = function(phy, node_name) {
+    node_names = c(phy[['tip.label']], phy$node.label)
+    node_nums = 1:length(node_names)
+    node_num = node_nums[node_names %in% node_name]
+    return(node_num)
+}
+
+# copied from rkftools https://github.com/kfuku52/rkftools
+get_root_num = function(phy) {
+    root_num = setdiff(phy[['edge']][,1], phy[['edge']][,2])
+    return(root_num)
+}
+
+# copied from rkftools https://github.com/kfuku52/rkftools
+get_parent_num = function(phy, node_num) {
+    parent_num = phy[['edge']][(phy[['edge']][,2]==node_num),1]
+    return(parent_num)
+}
+
+# copied from rkftools https://github.com/kfuku52/rkftools
+get_sister_num = function(phy, node_num) {
+    parent_num = phy[['edge']][(phy[['edge']][,2]==node_num),1]
+    sibling_num = phy[['edge']][(phy[['edge']][,1]==parent_num),2]
+    sister_num = sibling_num[sibling_num!=node_num]
+    return(sister_num)
+}
+
+# copied from rkftools https://github.com/kfuku52/rkftools
+get_ancestor_num = function(phy, node_num) {
+    ancestor_num = c()
+    root_num = get_root_num(phy)
+    current_node_num = node_num
+    for (i in 1:phy[['Nnode']]) {
+        if (current_node_num==root_num) {
+            break
+        }
+        parent_num = get_parent_num(phy, current_node_num)
+        ancestor_num = c(ancestor_num, parent_num)
+        current_node_num = parent_num
+    }
+    return(ancestor_num)
+}
+
+# copied from rkftools https://github.com/kfuku52/rkftools
+read_notung_parsable = function(file, mode='D') {
+    options(stringsAsFactors=FALSE)
+    cols = c('event', 'gn_node', 'lower_sp_node', 'upper_sp_node')
+    if (mode=='D') {
+        f = file(file,"r")
+        event_lines = c()
+        repeat {
+             str = readLines(con=f,1)
+             if (length(str)==0) {
+                 break
+             }
+             event_lines = c(event_lines, str)
+        }
+        dup_positions = grep("^#D", event_lines)
+        if (length(dup_positions)>1) {
+            dup_lines = event_lines[dup_positions]
+            dup_items = strsplit(dup_lines[2:length(dup_lines)], "\\s")
+            event_items = strsplit(dup_lines[2:length(dup_lines)], "\\s")
+            df = data.frame(t(data.frame(dup_items)))
+            rownames(df) = NULL
+            colnames(df) = cols
+            df$event = 'D'
+        } else {
+            df = data.frame(matrix(NA, 0, length(cols)))
+            colnames(df) = cols
+        }
+    } else {
+        cat('mode', mode, 'is not supported.')
+        df = data.frame(matrix(NA, 0, length(cols)))
+        colnames(df) = cols
+    }
+    close(f)
+    return(df)
+}
+
+# copied from rkftools https://github.com/kfuku52/rkftools
+pad_short_edges = function(tree, threshold=1e-6, external_only=FALSE) {
+    stopifnot(ape::is.binary(tree))
+    edge_idx = 1:nrow(tree$edge)
+    is_target_edge = TRUE
+    if (external_only) {
+        is_target_edge = is_target_edge & (tree$edge[,2]<=length(tree$tip.label))
+    }
+    edge_lengths = tree[['edge.length']][is_target_edge]
+    min_eel = min(edge_lengths)
+    cat('Minimum edge length:', min_eel, '\n')
+    is_short_eel = (is_target_edge)&(tree$edge.length<threshold)
+    num_short_eel = sum(is_short_eel)
+    cat('Number of short edges ( length <', threshold, '):', num_short_eel, '\n')
+    if (num_short_eel>0) {
+        short_eel_idx = edge_idx[is_short_eel]
+        for (i in short_eel_idx) {
+            if (tree$edge.length[i]<threshold) {
+                shift_value = threshold - tree$edge.length[i]
+                sister_node_num = get_sister_num(tree, tree$edge[i,2])
+                sister_edge_idx = edge_idx[tree$edge[,2]==sister_node_num]
+                root_num = get_root_num(tree)
+                flag = TRUE
+                flag_root = FALSE
+                current_idx = i
+                while (flag==TRUE) {
+                    parent_node_num = tree$edge[current_idx,1]
+                    parent_edge_idx = edge_idx[tree$edge[,2]==parent_node_num]
+                    parent_edge_length = tree$edge.length[parent_edge_idx]
+                    if (parent_node_num==root_num) {
+                        flag = FALSE
+                        flag_root = TRUE
+                    } else if (parent_edge_length>=threshold+shift_value) {
+                        flag = FALSE
+                    } else {
+                        current_idx = edge_idx[tree$edge[,2]==parent_node_num]
+                    }
+                }
+
+                tree$edge.length[i] = tree$edge.length[i] +shift_value
+                tree$edge.length[sister_edge_idx] = tree$edge.length[sister_edge_idx] + shift_value
+                if (flag_root) {
+                    cat('Adding branch length to subroot edges,', i, 'and', sister_edge_idx, '\n')
+                } else {
+                    cat('Transfering branch length from edge', parent_edge_idx, 'to', i, 'and', sister_edge_idx, '\n')
+                    tree$edge.length[parent_edge_idx] = tree$edge.length[parent_edge_idx] - shift_value
+                }
+            }
+        }
+    }
+    return(tree)
+}
+
+# copied from rkftools https://github.com/kfuku52/rkftools
+force_ultrametric = function(tree, stop_if_larger_change=0.01) {
+    if (ape::is.ultrametric(tree)) {
+        cat('The tree is ultrametric.\n')
+    } else {
+        cat('The tree is not ultrametric. Adjusting the branch length.\n')
+        edge_length_before = tree[['edge.length']]
+        tree = ape::chronoMPL(tree)
+        edge_length_after = tree[['edge.length']]
+        sum_adjustment = sum(abs(edge_length_after-edge_length_before))
+        cat('Total branch length difference between before- and after-adjustment:', sum_adjustment, '\n')
+        stopifnot(sum_adjustment<(sum(tree[['edge.length']]) * stop_if_larger_change))
+    }
+    return(tree)
+}
+
+# copied from rkftools https://github.com/kfuku52/rkftools
+contains_polytomy = function(phy) {
+    if (max(table(phy[['edge']][,1]))>2) {
+        is_polytomy = TRUE
+    } else {
+        is_polytomy = FALSE
+    }
+    return(is_polytomy)
+}
+
+# copied from rkftools https://github.com/kfuku52/rkftools
+get_species_names = function(phy, sep='_') {
+    split_names = strsplit(phy[['tip.label']], sep)
+    species_names = c()
+    for (sn in split_names) {
+        species_names = c(species_names, paste0(sn[1], sep, sn[2]))
+    }
+    return(species_names)
+}
+
+# copied from rkftools https://github.com/kfuku52/rkftools
+leaf2species = function(leaf_names) {
+    split = strsplit(leaf_names, '_')
+    species_names = c()
+    for (i in 1:length(split)) {
+        if (length(split[[i]])>=3) {
+            species_names = c(
+                species_names,
+                paste(split[[i]][[1]], split[[i]][[2]])
+            )
+        } else {
+            warning('leaf name could not be interpreted as genus_species_gene: ', split[[i]], '\n')
+        }
+    }
+    return(species_names)
+}
 
 check_gn_node_name_uniqueness = function(gn_node_table, gn_tree)
 for (gn_node_name in gn_node_table[,'gn_node']) {
-    n = rkftools::get_node_num_by_name(gn_tree, gn_node_name)
+    n = get_node_num_by_name(gn_tree, gn_node_name)
     if (!length(n)==1) {
         stop(paste('Input gene tree contains multiple nodes with the identical name:', gn_node_name))
     }
@@ -70,7 +283,7 @@ save_tree_pdf = function(phy, file, show.age=FALSE, edge_colors=list()) {
         is_node = (phy[['edge']][,2]>length(phy[['tip.label']]))
         node_order = order(phy[['edge']][,2][is_node])
         node_colors = ec2[is_node][node_order]
-        root_num = rkftools::get_root_num(phy)
+        root_num = get_root_num(phy)
         for (col in names(edge_colors)) {
             if (root_num %in% edge_colors[[col]]) {
                 node_colors = c(col, node_colors) # Adding root
@@ -80,7 +293,7 @@ save_tree_pdf = function(phy, file, show.age=FALSE, edge_colors=list()) {
     }
     pdf(file, height=max(3, length(phy$tip.label)/5+1), width=7.2)
     plot(phy, show.node.label=FALSE, show.tip.label=TRUE, cex=0.5, label.offset=0, 
-         edge.color='black', root.edge=TRUE)
+         edge.color=ec2, root.edge=TRUE)
     nodelabels(text=phy[['node.label']], col=node_colors, bg='white', cex=0.5)
     invisible(dev.off())
 }
@@ -90,7 +303,7 @@ cat('RADTE run_mode:', run_mode, '\n')
 if (run_mode=='batch') {
     cat('arguments:\n')
     args = commandArgs(trailingOnly=TRUE)
-    args = rkftools::get_parsed_args(args, print=TRUE)
+    args = get_parsed_args(args, print=TRUE)
 } else if (run_mode=='debug') {
     test_type = 'generax'
     #test_type = 'notung'
@@ -100,16 +313,16 @@ if (run_mode=='batch') {
     args[['chronos_model']] = 'discrete'
     args[['pad_short_edge']] = 0.001
     if (test_type=='notung') {
-        work_dir = '/Users/kef74yk/Dropbox/repos/RADTE/data/example_notung_01'
+        work_dir = '/Users/kef74yk/Dropbox/repos/RADTE/data/issue_4_3'
         setwd(work_dir)
         args[['species_tree']] = file.path(work_dir, 'species_tree.nwk')
         #args[['gene_tree']] = file.path(work_dir, 'gene_tree.reconciled')
         #args[['notung_parsable']] = file.path(work_dir, 'gene_tree.parsable.txt')
-        args[['gene_tree']] = file.path(work_dir, 'gene_tree.nwk.reconciled')
-        args[['notung_parsable']] = file.path(work_dir, 'gene_tree.nwk.reconciled.parsable.txt')        
+        args[['gene_tree']] = file.path(work_dir, 'OG0001004_binary.txt.reconciled')
+        args[['notung_parsable']] = file.path(work_dir, 'OG0001004_binary.txt.reconciled.parsable.txt')        
     }
     if (test_type=='generax') {
-        work_dir = '/Volumes/kfT7/Dropbox/repos/RADTE/data/example_generax_01'
+        work_dir = '/Users/kf/Dropbox/repos/RADTE/data/issue_6'
         setwd(work_dir)
         args[['species_tree']] = file.path(work_dir, 'species_tree.nwk')
         args[['generax_nhx']] = file.path(work_dir, 'gene_tree.nhx')
@@ -146,14 +359,14 @@ if (all(is.na(sp_tree$node.label))) {
     sp_tree[['node.label']] = sub('PLACEHOLDER', '', sp_tree[['node.label']])
 }
 has_nolabel = any(sp_tree[['node.label']]=='')
-if (has_nolabel) { stop('Please make sure to label all nodes in the input species tree, including the root node.') }
+if (has_nolabel) { stop('Input species tree contains non-labeled node(s).') }
 if (length(args[['pad_short_edge']])) {
-    sp_tree = rkftools::pad_short_edges(sp_tree, threshold=args[['pad_short_edge']], external_only=FALSE)
+    sp_tree = pad_short_edges(sp_tree, threshold=args[['pad_short_edge']], external_only=FALSE)
 }
-sp_tree = rkftools::force_ultrametric(sp_tree, stop_if_larger_change=0.01)
+sp_tree = force_ultrametric(sp_tree, stop_if_larger_change=0.01)
 root_depth = max(node.depth.edgelength(sp_tree))
 sp_node_ages = abs(node.depth.edgelength(sp_tree) - root_depth)
-sp_node_names = c(sp_tree$tip.label, sp_tree$node.label)
+sp_node_names = c(sp_tree[['tip.label']], sp_tree[['node.label']])
 sp_node_table = data.frame(node=sp_node_names, age=sp_node_ages, spp=NA, stringsAsFactors=FALSE)
 for (sp_sub in ape::subtrees(sp_tree)) {
     subroot_node = sp_sub[['node.label']][1]
@@ -185,7 +398,7 @@ if (mode=='generax') {
     nhxtree = read_generax_nhx(generax_file)
 
     gn_tree = nhxtree@phylo
-    if (rkftools::contains_polytomy(gn_tree)) {
+    if (contains_polytomy(gn_tree)) {
         stop('Input tree contains polytomy. A completely bifurcated tree is expected as input.')
     }
     gn_tree = pad_branch_length(gn_tree, pad_size=args[['pad_short_edge']])
@@ -202,9 +415,9 @@ if (mode=='generax') {
     gn_node_table[,'gn_node'] = c(gn_tree[['tip.label']], gn_tree[['node.label']])
     gn_node_table[(gn_node_table[['event']]=='D'),'upper_sp_node'] = NA
     for (sp_node in unique(gn_node_table[['lower_sp_node']])) {
-        node_num = rkftools::get_node_num_by_name(sp_tree, sp_node)
-        parent_num = rkftools::get_parent_num(sp_tree, node_num)
-        parent_name = rkftools::get_node_name_by_num(sp_tree, parent_num)
+        node_num = get_node_num_by_name(sp_tree, sp_node)
+        parent_num = get_parent_num(sp_tree, node_num)
+        parent_name = get_node_name_by_num(sp_tree, parent_num)
         if (identical(parent_name, character(0))) {
             parent_name = NA
         }
@@ -222,13 +435,13 @@ if (mode=='generax') {
         gn_node_table[conditions,'lower_age'] = node_age
         gn_node_table[conditions,'upper_age'] = node_age
     }
-    gn_node_table[,'gn_node_num'] = rkftools::get_node_num_by_name(gn_tree, gn_node_table[['gn_node']])
+    gn_node_table[,'gn_node_num'] = get_node_num_by_name(gn_tree, gn_node_table[['gn_node']])
     gn_node_table = data.frame(gn_node_table[,cols], stringsAsFactors=FALSE)
 } else if (mode=='notung') {
     cat('Reading NOTUNG tree.\n')
     gn_tree = read.tree(gn_file)
     gn_tree[['node.label']] = gsub("\\'", "",gn_tree[['node.label']])
-    if (rkftools::contains_polytomy(gn_tree)) {
+    if (contains_polytomy(gn_tree)) {
         stop('Input tree contains polytomy. A completely bifurcated tree is expected as input.')
     }
     gn_tree = pad_branch_length(gn_tree, pad_size=args[['pad_short_edge']])
@@ -237,7 +450,7 @@ if (mode=='generax') {
     gn_node_table = merge(gn_node_table, data.frame(lower_age=NA, upper_age=NA, spp=NA), all=TRUE)
     check_gn_node_name_uniqueness(gn_node_table, gn_tree)
     if (nrow(gn_node_table) > 0) {
-        gn_node_nums = sapply(gn_node_table[,'gn_node'], function(x){rkftools::get_node_num_by_name(gn_tree, x)})
+        gn_node_nums = sapply(gn_node_table[,'gn_node'], function(x){get_node_num_by_name(gn_tree, x)})
         gn_node_table$gn_node_num = gn_node_nums
         for (i in 1:nrow(gn_node_table)) {
             if (any(sp_node_table$node==gn_node_table$lower_sp_node[i])) {
@@ -254,8 +467,8 @@ if (mode=='generax') {
     for (gn_sub in ape::subtrees(gn_tree)) {
         root_node = gn_sub$node.label[1]
         if (! root_node %in% gn_node_table$gn_node) {
-            root_num = rkftools::get_node_num_by_name(gn_tree, root_node)
-            node_spp = unique(rkftools::leaf2species(gn_sub[['tip.label']]))
+            root_num = get_node_num_by_name(gn_tree, root_node)
+            node_spp = unique(leaf2species(gn_sub[['tip.label']]))
             node_spp = sub(' ', '_', node_spp)
             is_spnode_species = TRUE
             for (node_sp in node_spp) {
@@ -289,12 +502,12 @@ if ((sum(gn_node_table[['event']]=="D") > 0)&(any(is.na(gn_node_table[['upper_ag
     cat('# species in the gene tree:', num_sp, '\n')
     cat('Species in the gene tree:', paste(gn_spp, collapse=', '), '\n')
     num_sp_gntree = max(1, ape::getMRCA(sp_tree, gn_spp))
-    if (num_sp_gntree==rkftools::get_root_num(sp_tree)) {
+    if (num_sp_gntree==get_root_num(sp_tree)) {
         divtime_max = max_age
         divtime_min = max(ape::node.depth.edgelength(sp_tree))
     } else {
         if (length(gn_spp)==1) {
-            num_mrca = rkftools::get_node_num_by_name(sp_tree, gn_spp)
+            num_mrca = get_node_num_by_name(sp_tree, gn_spp)
         } else {
             num_mrca = ape::getMRCA(sp_tree, gn_spp)
         }
@@ -312,7 +525,7 @@ if ((sum(gn_node_table[['event']]=="D") > 0)&(any(is.na(gn_node_table[['upper_ag
     gn_node_table$lower_age[is_upper_na] = divtime_min
     gn_node_table$upper_age[is_upper_na] = divtime_max
 }
-root_num = rkftools::get_root_num(gn_tree)
+root_num = get_root_num(gn_tree)
 if (!endsWith(gn_node_table[(gn_node_table$gn_node_num==root_num),'event'], 'R')) {
     gn_node_table[(gn_node_table$gn_node_num==root_num),'event'] = paste0(gn_node_table[(gn_node_table$gn_node_num==root_num),'event'], '(R)')
 }
@@ -338,7 +551,7 @@ for (gn_node_num in gn_node_table[['gn_node_num']]) {
             cat('calibration node removed because of the constraint identical to or greater than one of the upper nodes (name/id/lower/upper):\n')
             flag_first = FALSE
         }
-        droppable_name = rkftools::get_node_name_by_num(gn_tree, gn_node_num)
+        droppable_name = get_node_name_by_num(gn_tree, gn_node_num)
         cat(paste(c(droppable_name, gn_node_num, child_upper, child_lower), collapse='/'), '\n')
         droppable_nodes = c(droppable_nodes, gn_node_num)
     }
@@ -438,9 +651,9 @@ if ("try-error" %in% class(chronos_out)) {
     counter = 1
     if (length(args[['pad_short_edge']])) {
         while ((num_neg>0)&(counter<100)) {
-            cat(paste0(counter, 'th round of padding started.\n'))
-            chronos_out2 = rkftools::pad_short_edges(chronos_out2, threshold=args[['pad_short_edge']], external_only=FALSE)
-            chronos_out2 = rkftools::force_ultrametric(chronos_out2, stop_if_larger_change=0.01)
+            cat(paste0('Branch length padding round ', counter, ' started.\n'))
+            chronos_out2 = pad_short_edges(chronos_out2, threshold=args[['pad_short_edge']], external_only=FALSE)
+            chronos_out2 = force_ultrametric(chronos_out2, stop_if_larger_change=0.01)
             num_neg = sum(chronos_out2[['edge.length']]<0)
             cat(num_neg, 'negative value(s) were detected in estimated branch length.\n\n')
             counter = counter + 1
@@ -471,7 +684,7 @@ if ("try-error" %in% class(chronos_out)) {
     save_tree_pdf(phy=sp_tree, file="radte_species_tree.pdf", show.age=TRUE)
 
     cat('Calibrated nodes:', calibrated_node, '\n')
-    cat('Tree height:', max(ape::node.depth.edgelength(sp_tree)), 'million years', '\n')
+    cat('Tree height:', max(ape::node.depth.edgelength(sp_tree)), '\n')
     is_max_age = (calibration_table[,'age.max']==max_age)
     num_spnode_used_for_constraint = nrow(unique(calibration_table[!is_max_age,c('age.min','age.max')]))
     cat('Number of species tree node used for the gene tree constraint:', num_spnode_used_for_constraint, '\n')    
