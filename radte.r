@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-radte_version = '0.2.1'
+radte_version = '0.2.2'
 
 run_mode = ifelse(length(commandArgs(trailingOnly=TRUE))==1, 'debug', 'batch')
 #if (run_mode=='debug') install.packages("/Users/kef74yk/Dropbox (Personal)/repos/ape", repos=NULL, type="source")
@@ -226,6 +226,25 @@ leaf2species = function(leaf_names) {
         }
     }
     return(species_names)
+}
+
+# copied from rkftools https://github.com/kfuku52/rkftools
+transfer_node_labels = function(phy_from, phy_to) {
+    for (t in 1:length(phy_to$node.label)) {
+        to_node = phy_to$node.label[t]
+        to_clade = extract.clade(phy=phy_to, node=to_node, root.edge = 0, interactive = FALSE)
+        to_leaves = to_clade$tip.label
+        for (f in 1:length(phy_from$node.label)) {
+            from_node = phy_from$node.label[f]
+            from_clade = extract.clade(phy=phy_from, node=from_node, root.edge = 0, interactive = FALSE)
+            from_leaves = from_clade$tip.label
+            if (setequal(to_leaves, from_leaves)) {
+                phy_to$node.label[t] = from_node
+                break
+            }
+        }
+    }
+    return(phy_to)
 }
 
 check_gn_node_name_uniqueness = function(gn_node_table, gn_tree)
