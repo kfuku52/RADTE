@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-radte_version = '0.2.2'
+radte_version = '0.2.3'
 
 run_mode = ifelse(length(commandArgs(trailingOnly=TRUE))==1, 'debug', 'batch')
 #if (run_mode=='debug') install.packages("/Users/kef74yk/Dropbox (Personal)/repos/ape", repos=NULL, type="source")
@@ -9,9 +9,12 @@ run_mode = ifelse(length(commandArgs(trailingOnly=TRUE))==1, 'debug', 'batch')
 
 library(ape)
 
-cat(paste('RADTE version:', radte_version, '\n'))
-cat(paste('ape version:', packageVersion('ape'), '\n'))
 cat(paste(version[['version.string']], '\n'))
+cat(paste('ape version:', packageVersion('ape'), '\n'))
+cat(paste('RADTE version:', radte_version, '\n'))
+cat(paste('RADTE command:', paste(commandArgs(trailingOnly=FALSE), collapse=' '), '\n'))
+cat(paste('RADTE bug report:', 'https://github.com/kfuku52/RADTE/issues', '\n'))
+
 
 # copied from rkftools https://github.com/kfuku52/rkftools
 get_parsed_args = function(args, print=TRUE) {
@@ -330,7 +333,7 @@ if (run_mode=='batch') {
     args[['max_age']] = 1000
     args[['chronos_lambda']] = 1
     args[['chronos_model']] = 'discrete'
-    args[['pad_short_edge']] = 0.001
+    args[['pad_short_edge']] = 0.0001
     if (test_type=='notung') {
         work_dir = '/Users/kef74yk/Dropbox/repos/RADTE/data/issue_4_3'
         setwd(work_dir)
@@ -341,7 +344,7 @@ if (run_mode=='batch') {
         args[['notung_parsable']] = file.path(work_dir, 'OG0001004_binary.txt.reconciled.parsable.txt')        
     }
     if (test_type=='generax') {
-        work_dir = '/Users/kf/Dropbox/repos/RADTE/data/issue_6'
+        work_dir = '/Users/kf/Dropbox/data/evolutionary_transcriptomics/20231016_gfe_pipeline/gfe_data_debug'
         setwd(work_dir)
         args[['species_tree']] = file.path(work_dir, 'species_tree.nwk')
         args[['generax_nhx']] = file.path(work_dir, 'gene_tree.nhx')
