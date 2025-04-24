@@ -1,59 +1,35 @@
-name: Create GitHub Tag from __version__
+name: Tag from radte.r
 
 on:
+  workflow_dispatch:  # 手動実行
   push:
-    branches:
-      - main
-  workflow_dispatch:
+    branches: [main]  # main更新時でも可
 
 jobs:
-  create_tag:
+  extract-version-and-tag:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Detect version using AST
-        id: get_version
+      - name: Extract version from radte.r
+        id: extract_version
         run: |
-          echo "🔍 Searching for __init__.py..."
+          version=$(grep "^radte_version" radte.r | sed -E "s/.*'([0-9.]+)'.*/\1/")
+          echo "version=$version" >> $GITHUB_OUTPUT
 
-          INIT_PATH=$(find . -type f -name '__init__.py' | head -n1)
-          echo "Found: $INIT_PATH"
-
-          echo 'import ast' > get_version.py
-          echo 'with open("'"$INIT_PATH"'") as f:' >> get_version.py
-          echo '    tree = ast.parse(f.read())' >> get_version.py
-          echo 'for node in ast.walk(tree):' >> get_version.py
-          echo '    if isinstance(node, ast.Assign):' >> get_version.py
-          echo '        if getattr(node.targets[0], "id", None) == "__version__":' >> get_version.py
-          echo '            print(node.value.s)' >> get_version.py
-          echo '            break' >> get_version.py
-
-          VERSION=$(python3 get_version.py)
-          PACKAGE=$(basename $(dirname "$INIT_PATH"))
-
-          if [ -z "$VERSION" ]; then
-            echo "❌ __version__ not found in $INIT_PATH"
-            exit 1
-          fi
-
-          echo "📦 PACKAGE: $PACKAGE"
-          echo "📌 VERSION: $VERSION"
-
-          echo "PACKAGE=$PACKAGE" >> $GITHUB_ENV
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-
-      - name: Create tag if not exists
+      - name: Check latest tag
+        id: check_tag
         run: |
           git fetch --tags
-          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
-            echo "✅ Tag v$VERSION already exists. Skipping."
-          else
-            echo "🏷 Creating new tag v$VERSION"
-            git config user.name "github-actions"
-            git config user.email "actions@github.com"
-            git tag "v$VERSION"
-            git push origin "v$VERSION"
-          fi
+          latest_tag=$(git tag | sort -V | tail -n 1)
+          echo "latest_tag=$latest_tag" >> $GITHUB_OUTPUT
+
+      - name: Create new tag if needed
+        if: steps.extract_version.outputs.version != steps.check_tag.outputs.latest_tag
+        run: |
+          version=${{ steps.extract_version.outputs.version }}
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git tag "v$version"
+          git push origin "v$version"
