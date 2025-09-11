@@ -46,3 +46,10 @@ jobs:
           path: |
             logs/**
             radte_out/**
+      
+      - name: Upload RADTE smoke artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: radte-smoke-outputs
+          path: ${{ runner.temp }}/radte_out/**
+

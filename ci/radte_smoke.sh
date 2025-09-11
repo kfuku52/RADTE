@@ -47,3 +47,22 @@ radte \
 ls -l "${WORKDIR}"/smoke_notung* || true
 
 echo "[RADTE] done"
+
+# 作業パス
+WORKDIR="${GITHUB_WORKSPACE}"                     # <- CWD 側にも出るため
+ARTDIR="${RUNNER_TEMP:-$PWD}/radte_out"          # <- ここへ集約
+mkdir -p "$ARTDIR/generax" "$ARTDIR/notung"
+
+# GeneRax 実行後
+# 既知の出力名を片っ端から拾って保全（存在すればコピー）
+for f in radte_*.* *_species_tree.* *_gene_tree_output.*; do
+  [ -f "$WORKDIR/$f" ] && cp -f "$WORKDIR/$f" "$ARTDIR/generax/" || true
+done
+
+# Notung 実行後
+for f in radte_*.* *_species_tree.* *_gene_tree_output.*; do
+  [ -f "$WORKDIR/$f" ] && cp -f "$WORKDIR/$f" "$ARTDIR/notung/" || true
+done
+
+# 仕上げ表示
+echo "[ARTIFACTS]"; find "$ARTDIR" -maxdepth 2 -type f -printf '%P\n' || true
