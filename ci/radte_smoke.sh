@@ -79,27 +79,43 @@ if compgen -G "${RADTE_OUT}/neg1/radte_*" > /dev/null; then
 fi
 echo "✅ expected failure (non-ultrametric), rc=$rc"
 
-# 2) ゼロ長末端枝を含むウルトラメトリック → パディングされて成功を期待（終了コード == 0）
-echo "[RADTE][POS] ultrametric with zero-length leaves should PASS (padding)"
+# 2) ゼロ長枝を含む「遺伝子系統樹」→ パディングされて成功を期待
+echo "[RADTE][POS] gene tree with a zero-length edge should PASS (padding)"
+
+# 入力 Notung gene tree をコピーし、最短枝を 0 に書き換えて短枝を強制
+MOD_GN="${RUN_TMP}/gene_tree.short.nwk"
+Rscript - <<RS
+suppressPackageStartupMessages(library(ape))
+gn <- read.tree("${RADTE_WS}/data/example_notung_01/gene_tree.nwk.reconciled")
+i  <- which.min(gn$edge.length)
+gn$edge.length[i] <- 0  # 最短枝を 0 に
+write.tree(gn, "${MOD_GN}")
+cat("min_edge_in:", min(gn$edge.length), "\n")
+RS
+
+# 実行（種系統樹はオリジナル、遺伝子系統樹だけ改変版を使用）
 mkdir -p "${RADTE_OUT}/pos1"
 radte \
-  --species_tree="${RADTE_DUMMY}/species_tree.short_leaves_ultra.nwk" \
-  --gene_tree="${RADTE_WS}/data/example_notung_01/gene_tree.nwk.reconciled" \
+  --species_tree="${RADTE_WS}/data/example_notung_01/species_tree.nwk" \
+  --gene_tree="${MOD_GN}" \
   --notung_parsable="${RADTE_WS}/data/example_notung_01/gene_tree.nwk.reconciled.parsable.txt" \
+  --pad_short_edge=0.001 \
   --work_dir="${RADTE_OUT}/pos1" \
   --out_prefix="pos_short_pad"
-# 代表的成果物が存在することをチェック
+
+# 代表的成果物をチェック
 OUT_NWK="${RADTE_OUT}/pos1/radte_gene_tree_output.nwk"
 [ -s "${OUT_NWK}" ] || { echo "❌ expected output not found: ${OUT_NWK}"; exit 1; }
 
-# 追加の機械検証（apeで妥当性チェック）
+# 出力ツリーの最短枝が 0.001 以上になっていることを機械検証（パディング確認）
 Rscript - <<RS
 suppressPackageStartupMessages(library(ape))
 tr <- read.tree("${OUT_NWK}")
 stopifnot(is.list(tr), length(tr$tip.label) > 0)
-stopifnot(all(tr$edge.length >= 0))
+min_e <- min(tr$edge.length)
+stopifnot(min_e >= 0.001 - 1e-8)
 cat("OK: parsed ${OUT_NWK}, tips=", length(tr$tip.label),
-    ", min_edge=", min(tr$edge.length), "\n", sep="")
+    ", min_edge=", min_e, " (>= 0.001)\n", sep="")
 RS
 echo "✅ padding/positive case confirmed"
 
