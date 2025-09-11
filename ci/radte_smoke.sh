@@ -75,6 +75,12 @@ echo "[RADTE][POS] gene tree with a zero-length edge should PASS (padding)"
 MOD_GN="${RUN_TMP}/gene_tree.short.nwk"
 GN_IN="${RADTE_WS}/data/example_notung_01/gene_tree.nwk.reconciled"
 GN_OUT="${MOD_GN}"
+mkdir -p "$(dirname "$MOD_GN")"
+export GN_IN GN_OUT
+
+echo "GN_IN=${GN_IN}"
+ls -l "${GN_IN}"
+
 Rscript - <<'RS'   # ← ここを必ずクオート。bash 変数展開を抑止
 suppressPackageStartupMessages(library(ape))
 gn <- read.tree(Sys.getenv("GN_IN"))
@@ -83,6 +89,8 @@ gn$edge.length[i] <- 0  # 最短枝を 0 に
 write.tree(gn, Sys.getenv("GN_OUT"))
 cat("min_edge_in:", min(gn$edge.length), "\n")
 RS
+
+ls -l "${MOD_GN}"
 
 # 実行（種系統樹はオリジナル、遺伝子系統樹だけ改変版を使用）
 mkdir -p "${RADTE_OUT}/pos1"
