@@ -98,6 +98,7 @@ radte \
   --species_tree="${RADTE_WS}/data/example_notung_01/species_tree.nwk" \
   --gene_tree="${MOD_GN}" \
   --notung_parsable="${RADTE_WS}/data/example_notung_01/gene_tree.nwk.reconciled.parsable.txt" \
+  --max_age=1000 \
   --pad_short_edge=0.001 \
   --work_dir="${RADTE_OUT}/pos1" \
   --out_prefix="pos_short_pad" |& tee "${LOGDIR}/pos_short_pad.log"
