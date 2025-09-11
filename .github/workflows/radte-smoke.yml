@@ -1,0 +1,48 @@
+name: RADTE smoke
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up micromamba
+        uses: mamba-org/setup-micromamba@v1
+        with:
+          environment-name: radte-ci
+          create-args: >-
+            python=3.11
+            r-base=4.4
+            -c conda-forge -c bioconda
+          cache-environment: true
+
+      - name: Install RADTE (bioconda)
+        shell: bash -l {0}
+        run: |
+          micromamba install -y -c bioconda -c conda-forge radte
+
+      - name: Install R packages (Bioconductor/CRAN)
+        shell: bash -l {0}
+        run: |
+          R -q --vanilla -f ci/install_R_deps.R
+
+      - name: Run smoke test
+        shell: bash -l {0}
+        run: |
+          bash ci/radte_smoke.sh
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: radte-smoke-artifacts
+          path: |
+            logs/**
+            radte_out/**
