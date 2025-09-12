@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# 追加：ラッパー関数（指定ディレクトリでradteを実行）
+run_radte () {
+  local outdir="$1"; shift
+  mkdir -p "$outdir"
+  # CWD を outdir にして実行（--work_dir も合わせて渡す）
+  ( cd "$outdir" && radte --work_dir="$outdir" "$@" )
+}
+
 # ========== パス定義（成果物はワークスペース直下に統一） ==========
 RADTE_WS="${GITHUB_WORKSPACE:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 RUN_TMP="${RUNNER_TEMP:-${RADTE_WS}/_tmp}"
@@ -28,21 +36,19 @@ COMMON_ARGS=(
 
 # ========== GeneRax ==========
 echo "[RADTE] GeneRax example"
-radte \
+run_radte "${RADTE_OUT}/generax" \
   --species_tree="${RADTE_WS}/data/example_generax_01/species_tree.nwk" \
   --generax_nhx="${RADTE_WS}/data/example_generax_01/gene_tree.nhx" \
   "${COMMON_ARGS[@]}" \
-  --work_dir="${RADTE_OUT}/generax" \
   --out_prefix=smoke_generax |& tee "${LOGDIR}/generax.log"
 
 # ========== Notung ==========
 echo "[RADTE] Notung example"
-radte \
+run_radte "${RADTE_OUT}/notung" \
   --species_tree="${RADTE_WS}/data/example_notung_01/species_tree.nwk" \
   --gene_tree="${RADTE_WS}/data/example_notung_01/gene_tree.nwk.reconciled" \
   --notung_parsable="${RADTE_WS}/data/example_notung_01/gene_tree.nwk.reconciled.parsable.txt" \
   "${COMMON_ARGS[@]}" \
-  --work_dir="${RADTE_OUT}/notung" \
   --out_prefix=smoke_notung |& tee "${LOGDIR}/notung.log"
 
 # ========== 異常系/境界テスト ==========
@@ -53,12 +59,13 @@ Rscript ci/gen_dummy_trees.R "${RADTE_DUMMY}"
 echo "[RADTE][NEG] non-ultrametric should FAIL"
 mkdir -p "${RADTE_OUT}/neg1"
 set +e
-radte \
-  --species_tree="${RADTE_DUMMY}/species_tree.non_ultrametric.nwk" \
-  --gene_tree="${RADTE_WS}/data/example_notung_01/gene_tree.nwk.reconciled" \
-  --notung_parsable="${RADTE_WS}/data/example_notung_01/gene_tree.nwk.reconciled.parsable.txt" \
-  --work_dir="${RADTE_OUT}/neg1" \
-  --out_prefix="neg_non_ultra" |& tee "${LOGDIR}/neg_non_ultra.log"
+( cd "${RADTE_OUT}/neg1" && \
+  radte --work_dir="${RADTE_OUT}/neg1" \
+    --species_tree="${RADTE_DUMMY}/species_tree.non_ultrametric.nwk" \
+    --gene_tree="${RADTE_WS}/data/example_notung_01/gene_tree.nwk.reconciled" \
+    --notung_parsable="${RADTE_WS}/data/example_notung_01/gene_tree.nwk.reconciled.parsable.txt" \
+    --out_prefix="neg_non_ultra" \
+) |& tee "${LOGDIR}/neg_non_ultra.log"
 rc=${PIPESTATUS[0]}
 set -e
 if [ $rc -eq 0 ]; then
@@ -95,26 +102,22 @@ RS
 ls -l "${MOD_GN}"
 
 # 実行（種系統樹はオリジナル、遺伝子系統樹だけ改変版を使用）
-mkdir -p "${RADTE_OUT}/pos1"
-radte \
+run_radte "${RADTE_OUT}/pos1" \
   --species_tree="${RADTE_WS}/data/example_notung_01/species_tree.nwk" \
   --gene_tree="${MOD_GN}" \
   --notung_parsable="${RADTE_WS}/data/example_notung_01/gene_tree.nwk.reconciled.parsable.txt" \
   "${COMMON_ARGS[@]}" \
-  --work_dir="${RADTE_OUT}/pos1" \
-  --out_prefix="pos_short_pad"
+  --out_prefix="pos_short_pad" |& tee "${LOGDIR}/pos1.log"
 
-# 出力ディレクトリの中身をとりあえず表示（デバッグ用）
-echo "[pos1] list outputs"; ls -la "${RADTE_OUT}/pos1" || true
-
-# gene_tree の NWK を自動検出（将来のファイル名変更に頑健）
-mapfile -t _CANDS < <(find "${RADTE_OUT}/pos1" -maxdepth 1 -type f -name '*gene_tree_output.nwk' | sort)
-if [ ${#_CANDS[@]} -eq 0 ]; then
-  echo "❌ no *gene_tree_output.nwk found in ${RADTE_OUT}/pos1"
+OUT_NWK="${RADTE_OUT}/pos1/radte_gene_tree_output.nwk"
+[ -s "${OUT_NWK}" ] || { 
+  echo "❌ no *gene_tree_output.nwk found in ${RADTE_OUT}/pos1"; 
+  echo "== pos1.log tail =="
+  tail -n 200 "${LOGDIR}/pos1.log" || true
+  echo "== search around =="
+  find "${RADTE_WS}" -maxdepth 3 -type f -name 'radte_gene_tree_output.nwk' -print || true
   exit 1
-fi
-OUT_NWK="${_CANDS[0]}"
-echo "[pos1] OUT_NWK=${OUT_NWK}"
+}
 
 # 出力ツリーの最短枝が 0.001 以上になっていることを機械検証（パディング確認）
 export OUT_NWK
