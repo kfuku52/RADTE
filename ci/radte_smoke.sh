@@ -104,9 +104,17 @@ radte \
   --work_dir="${RADTE_OUT}/pos1" \
   --out_prefix="pos_short_pad"
 
-# 代表的成果物をチェック
-OUT_NWK="${RADTE_OUT}/pos1/radte_gene_tree_output.nwk"
-[ -s "${OUT_NWK}" ] || { echo "❌ expected output not found: ${OUT_NWK}"; exit 1; }
+# 出力ディレクトリの中身をとりあえず表示（デバッグ用）
+echo "[pos1] list outputs"; ls -la "${RADTE_OUT}/pos1" || true
+
+# gene_tree の NWK を自動検出（将来のファイル名変更に頑健）
+mapfile -t _CANDS < <(find "${RADTE_OUT}/pos1" -maxdepth 1 -type f -name '*gene_tree_output.nwk' | sort)
+if [ ${#_CANDS[@]} -eq 0 ]; then
+  echo "❌ no *gene_tree_output.nwk found in ${RADTE_OUT}/pos1"
+  exit 1
+fi
+OUT_NWK="${_CANDS[0]}"
+echo "[pos1] OUT_NWK=${OUT_NWK}"
 
 # 出力ツリーの最短枝が 0.001 以上になっていることを機械検証（パディング確認）
 export OUT_NWK

@@ -2,16 +2,37 @@ name: RADTE smoke
 
 on:
   push:
+    branches: [ "**" ]
+    # 任意: CI対象ファイルのみに限定
+    # paths:
+    #   - ".github/workflows/radte-smoke.yml"
+    #   - "ci/**"
+    #   - "data/**"
+    #   - "DESCRIPTION"
   pull_request:
   workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: radte-smoke-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   smoke:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    defaults:
+      run:
+        shell: bash -l {0}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up micromamba
         uses: mamba-org/setup-micromamba@v1
@@ -24,19 +45,13 @@ jobs:
           cache-environment: true
 
       - name: Install RADTE (bioconda)
-        shell: bash -l {0}
-        run: |
-          micromamba install -y -c bioconda -c conda-forge radte
+        run: micromamba install -y -c bioconda -c conda-forge radte
 
       - name: Install R packages (Bioconductor/CRAN)
-        shell: bash -l {0}
-        run: |
-          R -q --vanilla -f ci/install_R_deps.R
+        run: R -q --vanilla -f ci/install_R_deps.R
 
       - name: Run smoke test
-        shell: bash -l {0}
-        run: |
-          bash ci/radte_smoke.sh
+        run: bash ci/radte_smoke.sh
 
       - name: Upload artifacts (workspace + temp)
         if: always()
@@ -49,4 +64,3 @@ jobs:
             ${{ runner.temp }}/radte_out/**
           if-no-files-found: warn
           retention-days: 7
-
