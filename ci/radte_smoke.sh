@@ -18,15 +18,20 @@ pkgs <- c("RADTE","ape","treeio","ggtree","tidytree","phangorn")
 for (p in pkgs) cat(p, ": ", if (requireNamespace(p, quietly=TRUE)) as.character(utils::packageVersion(p)) else "not installed", "\n", sep="")
 RS
 
+# すべての実行で共通して使う引数（値は今回のテスト想定）
+COMMON_ARGS=(
+  --max_age=1000
+  --chronos_lambda=1
+  --chronos_model=discrete
+  --pad_short_edge=0.001
+)
+
 # ========== GeneRax ==========
 echo "[RADTE] GeneRax example"
 radte \
   --species_tree="${RADTE_WS}/data/example_generax_01/species_tree.nwk" \
   --generax_nhx="${RADTE_WS}/data/example_generax_01/gene_tree.nhx" \
-  --max_age=1000 \
-  --chronos_lambda=1 \
-  --chronos_model=discrete \
-  --pad_short_edge=0.001 \
+  "${COMMON_ARGS[@]}" \
   --work_dir="${RADTE_OUT}/generax" \
   --out_prefix=smoke_generax |& tee "${LOGDIR}/generax.log"
 
@@ -36,10 +41,7 @@ radte \
   --species_tree="${RADTE_WS}/data/example_notung_01/species_tree.nwk" \
   --gene_tree="${RADTE_WS}/data/example_notung_01/gene_tree.nwk.reconciled" \
   --notung_parsable="${RADTE_WS}/data/example_notung_01/gene_tree.nwk.reconciled.parsable.txt" \
-  --max_age=1000 \
-  --chronos_lambda=1 \
-  --chronos_model=discrete \
-  --pad_short_edge=0.001 \
+  "${COMMON_ARGS[@]}" \
   --work_dir="${RADTE_OUT}/notung" \
   --out_prefix=smoke_notung |& tee "${LOGDIR}/notung.log"
 
@@ -98,16 +100,16 @@ radte \
   --species_tree="${RADTE_WS}/data/example_notung_01/species_tree.nwk" \
   --gene_tree="${MOD_GN}" \
   --notung_parsable="${RADTE_WS}/data/example_notung_01/gene_tree.nwk.reconciled.parsable.txt" \
-  --max_age=1000 \
-  --pad_short_edge=0.001 \
+  "${COMMON_ARGS[@]}" \
   --work_dir="${RADTE_OUT}/pos1" \
-  --out_prefix="pos_short_pad" |& tee "${LOGDIR}/pos_short_pad.log"
+  --out_prefix="pos_short_pad"
 
 # 代表的成果物をチェック
 OUT_NWK="${RADTE_OUT}/pos1/radte_gene_tree_output.nwk"
 [ -s "${OUT_NWK}" ] || { echo "❌ expected output not found: ${OUT_NWK}"; exit 1; }
 
 # 出力ツリーの最短枝が 0.001 以上になっていることを機械検証（パディング確認）
+export OUT_NWK
 Rscript - <<'RS'    # ← ここもクオート。パスは環境変数で受ける
 suppressPackageStartupMessages(library(ape))
 f  <- Sys.getenv("OUT_NWK")
