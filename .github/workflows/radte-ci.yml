@@ -1,4 +1,4 @@
-name: RADTE smoke
+name: RADTE ci
 
 on:
   push:
