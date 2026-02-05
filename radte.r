@@ -116,12 +116,12 @@ read_notung_parsable = function(file, mode='D') {
             df = data.frame(matrix(NA, 0, length(cols)))
             colnames(df) = cols
         }
+        close(f)
     } else {
         cat('mode', mode, 'is not supported.')
         df = data.frame(matrix(NA, 0, length(cols)))
         colnames(df) = cols
     }
-    close(f)
     return(df)
 }
 
