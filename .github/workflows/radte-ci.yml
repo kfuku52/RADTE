@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CRAN_REPO: https://cloud.r-project.org
-      R_LIBS_USER: ${{ runner.temp }}/R-lib
+      R_LIBS_USER: ${{ github.workspace }}/.r-lib/${{ matrix.r-version }}
     strategy:
       fail-fast: false
       matrix:
@@ -49,7 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CRAN_REPO: https://cloud.r-project.org
-      R_LIBS_USER: ${{ runner.temp }}/R-lib
+      R_LIBS_USER: ${{ github.workspace }}/.r-lib/${{ matrix.r-version }}
     strategy:
       fail-fast: false
       matrix:
