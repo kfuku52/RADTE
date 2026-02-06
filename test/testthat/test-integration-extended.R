@@ -439,3 +439,100 @@ test_that("RADTE works with chronos_model=relaxed", {
   expect_true(inherits(out_tree, "phylo"))
   expect_true(is.ultrametric(out_tree))
 })
+
+# --- Issue #8: extreme branch length heterogeneity ---
+
+test_that("RADTE handles gene tree with extreme branch length heterogeneity (issue #8)", {
+  # This test reproduces the chronos NaN error from issue #8
+  # Gene tree has edge lengths spanning many orders of magnitude (1e-10 to 1e5)
+  sp_file <- tempfile(fileext = ".nwk")
+  writeLines("((A_sp:10,B_sp:10)n1:20,C_sp:30)root;", sp_file)
+  on.exit(unlink(sp_file))
+
+  # Gene tree with extreme branch length heterogeneity
+  # Short branch: 1e-10 (near zero), Long branch: 1e5 (very large)
+  gn_file <- tempfile(fileext = ".nwk")
+  writeLines("(((A_sp_g1:1e-10,A_sp_g2:1e5)n1:0.1,B_sp_g1:0.1)n2:0.2,C_sp_g1:0.3)n3;", gn_file)
+  on.exit(unlink(gn_file), add = TRUE)
+
+  parsable_file <- tempfile(fileext = ".txt")
+  writeLines(c(
+    "1\t0\t0\t0\t4\t7\t3\t1e-10,1e5\tOff\t1\t1\t1.5\t0.0\t3.0\t1.0",
+    "nD\tnCD\tnT\tnL\t|L(G)|\t|G|\t|S|\tminEW,maxEW\tRoots\tCand\tFeas\tcD\tcCD\tcT\tcL",
+    "",
+    "#D\tDuplication\tL.Bound\tU.Bound",
+    "#D\tn1\tA_sp\tn1"
+  ), parsable_file)
+  on.exit(unlink(parsable_file), add = TRUE)
+
+  out_dir <- file.path(tempdir(), "radte_issue8")
+  dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
+  on.exit(unlink(out_dir, recursive = TRUE), add = TRUE)
+
+  cmd <- paste(
+    "Rscript", shQuote(radte_script),
+    paste0("--species_tree=", shQuote(sp_file)),
+    paste0("--gene_tree=", shQuote(gn_file)),
+    paste0("--notung_parsable=", shQuote(parsable_file)),
+    "--max_age=1000", "--chronos_lambda=1", "--chronos_model=discrete",
+    "--pad_short_edge=0.001"
+  )
+
+  old_wd <- getwd()
+  setwd(out_dir)
+  on.exit(setwd(old_wd), add = TRUE)
+
+  # Before the fix, this would fail with "missing value where TRUE/FALSE needed"
+  exit_code <- system(cmd, ignore.stdout = TRUE, ignore.stderr = TRUE)
+  expect_equal(exit_code, 0)
+
+  out_tree <- read.tree(file.path(out_dir, "radte_gene_tree_output.nwk"))
+  expect_true(inherits(out_tree, "phylo"))
+  expect_true(is.ultrametric(out_tree))
+  expect_equal(length(out_tree$tip.label), 4)
+})
+
+test_that("RADTE handles gene tree with moderately large branch lengths", {
+  # Test case with branch lengths in 1000-10000 range (below threshold)
+  sp_file <- tempfile(fileext = ".nwk")
+  writeLines("((A_sp:10,B_sp:10)n1:20,C_sp:30)root;", sp_file)
+  on.exit(unlink(sp_file))
+
+  gn_file <- tempfile(fileext = ".nwk")
+  writeLines("(((A_sp_g1:500,A_sp_g2:600)n1:700,B_sp_g1:800)n2:900,C_sp_g1:1000)n3;", gn_file)
+  on.exit(unlink(gn_file), add = TRUE)
+
+  parsable_file <- tempfile(fileext = ".txt")
+  writeLines(c(
+    "1\t0\t0\t0\t4\t7\t3\t500,1000\tOff\t1\t1\t1.5\t0.0\t3.0\t1.0",
+    "nD\tnCD\tnT\tnL\t|L(G)|\t|G|\t|S|\tminEW,maxEW\tRoots\tCand\tFeas\tcD\tcCD\tcT\tcL",
+    "",
+    "#D\tDuplication\tL.Bound\tU.Bound",
+    "#D\tn1\tA_sp\tn1"
+  ), parsable_file)
+  on.exit(unlink(parsable_file), add = TRUE)
+
+  out_dir <- file.path(tempdir(), "radte_moderate_bl")
+  dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
+  on.exit(unlink(out_dir, recursive = TRUE), add = TRUE)
+
+  cmd <- paste(
+    "Rscript", shQuote(radte_script),
+    paste0("--species_tree=", shQuote(sp_file)),
+    paste0("--gene_tree=", shQuote(gn_file)),
+    paste0("--notung_parsable=", shQuote(parsable_file)),
+    "--max_age=1000", "--chronos_lambda=1", "--chronos_model=discrete",
+    "--pad_short_edge=0.001"
+  )
+
+  old_wd <- getwd()
+  setwd(out_dir)
+  on.exit(setwd(old_wd), add = TRUE)
+
+  exit_code <- system(cmd, ignore.stdout = TRUE, ignore.stderr = TRUE)
+  expect_equal(exit_code, 0)
+
+  out_tree <- read.tree(file.path(out_dir, "radte_gene_tree_output.nwk"))
+  expect_true(inherits(out_tree, "phylo"))
+  expect_true(is.ultrametric(out_tree))
+})

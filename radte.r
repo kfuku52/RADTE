@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-radte_version = '0.2.4'
+radte_version = '0.2.5'
 
 run_mode = ifelse(length(commandArgs(trailingOnly=TRUE))==1, 'debug', 'batch')
 #if (run_mode=='debug') install.packages("/Users/kef74yk/Dropbox (Personal)/repos/ape", repos=NULL, type="source")
@@ -283,6 +283,21 @@ adjust_branch_length_order = function(tree, min_bl=1e-6) {
             break
         }
     }
+    return(tree)
+}
+
+normalize_edge_length_range = function(tree, max_edge = 1000, min_edge = 1e-8) {
+    # Scale down edge lengths if max is too large to prevent numerical overflow in chronos.
+    # Chronos fails with NaN errors when edge lengths exceed ~6000-7000.
+    # Using max_edge=1000 provides a safe margin.
+    edges <- tree$edge.length
+    if (max(edges) > max_edge) {
+        scale_factor <- max_edge / max(edges)
+        tree$edge.length <- edges * scale_factor
+        cat('Edge lengths scaled by factor:', scale_factor, 'to prevent numerical overflow.\n')
+    }
+    # Ensure minimum edge length is not too small (avoids underflow after scaling)
+    tree$edge.length[tree$edge.length < min_edge] <- min_edge
     return(tree)
 }
 
@@ -643,6 +658,8 @@ if (all(gn_node_table$lower_age==gn_node_table$upper_age)) {
     current_calibration_table = calibration_table_S
 } else {
     # Gene tree with duplication nodes
+    # Normalize edge lengths to prevent numerical overflow in chronos
+    gn_tree = normalize_edge_length_range(gn_tree, max_edge = 1000, min_edge = 1e-8)
     chronos_out = 'PLACEHOLDER'
     class(chronos_out) = 'try-error'
     for (cn in c('RS','S','R')) {

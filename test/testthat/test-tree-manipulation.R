@@ -50,6 +50,42 @@ test_that("adjust_branch_length_order errors on zero branch length", {
   expect_error(adjust_branch_length_order(tree, min_bl = 1e-6))
 })
 
+# --- normalize_edge_length_range ---
+
+test_that("normalize_edge_length_range scales down large edge lengths", {
+  tree <- read.tree(text = "((A:1e-15,B:1e10)n1:1,(C:1,D:1)n2:1)root;")
+  result <- normalize_edge_length_range(tree, max_edge = 1000, min_edge = 1e-8)
+  expect_lte(max(result$edge.length), 1000)
+  expect_gte(min(result$edge.length), 1e-8)
+})
+
+test_that("normalize_edge_length_range does not modify normal trees", {
+  tree <- read.tree(text = "((A:1,B:2)n1:1,C:3)root;")
+  result <- normalize_edge_length_range(tree, max_edge = 1000, min_edge = 1e-8)
+  expect_equal(tree$edge.length, result$edge.length)
+})
+
+test_that("normalize_edge_length_range preserves proportions", {
+  tree <- read.tree(text = "((A:1000,B:2000)n1:3000,C:4000)root;")
+  result <- normalize_edge_length_range(tree, max_edge = 100, min_edge = 1e-8)
+  # Original proportions: 1:2:3:4, should be preserved
+  expect_equal(max(result$edge.length), 100)
+  expect_equal(result$edge.length[result$edge.length == 100] /
+               result$edge.length[result$edge.length == min(result$edge.length)],
+               4000 / 1000)
+})
+
+test_that("normalize_edge_length_range enables chronos on extreme trees", {
+  skip_if_not_installed("ape")
+  tree <- read.tree(text = "((A:1e-15,B:1e10)n1:1,(C:1,D:1)n2:1)root;")
+  tree_norm <- normalize_edge_length_range(tree, max_edge = 1000, min_edge = 1e-8)
+  calibration <- makeChronosCalib(tree_norm, node = "root", age.min = 100, age.max = 100)
+  # Should not error
+  expect_no_error(suppressMessages(suppressWarnings(
+    chronos(tree_norm, lambda = 1, model = "discrete", calibration = calibration)
+  )))
+})
+
 # --- force_ultrametric ---
 
 test_that("force_ultrametric returns ultrametric tree unchanged", {
