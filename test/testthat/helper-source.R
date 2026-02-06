@@ -28,4 +28,4 @@ for (e in exprs) {
 }
 
 # Project root for accessing test data
-project_root <- normalizePath(file.path(radte_path, ".."))
+project_root <- normalizePath(dirname(radte_path))
