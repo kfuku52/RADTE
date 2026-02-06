@@ -1,5 +1,11 @@
 ![](logo/logo_radte_large.png)
 
+[![RADTE ci](https://github.com/kfuku52/RADTE/actions/workflows/radte-ci.yml/badge.svg)](https://github.com/kfuku52/RADTE/actions/workflows/radte-ci.yml)
+[![GitHub release](https://img.shields.io/github/v/tag/kfuku52/RADTE?label=release)](https://github.com/kfuku52/RADTE/releases)
+[![Bioconda](https://img.shields.io/conda/vn/bioconda/radte.svg)](https://anaconda.org/bioconda/radte)
+[![R](https://img.shields.io/badge/R-3.5%2B-blue)](https://www.r-project.org/)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+
 ## Overview
 **R**econciliation-**A**ssisted **D**ivergence **T**ime **E**stimation (**RADTE** / [rædˈti:](http://ipa-reader.xyz/?text=r%C3%A6d%CB%88ti:&voice=Salli)) is a method to date gene trees with the aid of dated species trees.
 This program can handle a rooted gene tree containing duplication/loss events.
@@ -155,6 +161,17 @@ If the estimation succeeded, the content of this file should be **RS**, because 
 If the first estimation failed, the constraints are gradually relaxed until successful estimation is obtained.
 As of version 0.2.0, the order of trials is as follows: **RS** -> **S** -> **R**. 
 This differs from the method described in Fukushima and Pollock (2020), where duplication nodes (**D**) may be constrained with the upper and lower limits.
+
+## Testing
+RADTE includes a comprehensive test suite using `testthat`. To run the tests:
+```
+# Install test dependencies
+Rscript -e 'install.packages(c("testthat", "ape"), repos="https://cloud.r-project.org")'
+Rscript -e 'install.packages("BiocManager", repos="https://cloud.r-project.org"); BiocManager::install("treeio")'
+
+# Run tests
+Rscript test/run_tests.R
+```
 
 ## Citation
 The prototype of RADTE is described in this publication.

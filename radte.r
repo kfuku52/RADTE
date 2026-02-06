@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-radte_version = '0.2.3'
+radte_version = '0.2.4'
 
 run_mode = ifelse(length(commandArgs(trailingOnly=TRUE))==1, 'debug', 'batch')
 #if (run_mode=='debug') install.packages("/Users/kef74yk/Dropbox (Personal)/repos/ape", repos=NULL, type="source")
