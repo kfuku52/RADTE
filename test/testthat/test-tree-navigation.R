@@ -24,6 +24,22 @@ test_that("get_node_name_by_num maps internal nodes correctly", {
   expect_equal(get_node_name_by_num(tree, 5), "n1")
 })
 
+test_that("get_node_name_by_num preserves input order for vectors", {
+  tree <- make_test_tree()
+  expect_equal(get_node_name_by_num(tree, c(5, 4)), c("n1", "root"))
+})
+
+test_that("get_node_name_by_num returns character(0) for empty input", {
+  tree <- make_test_tree()
+  expect_identical(get_node_name_by_num(tree, integer(0)), character(0))
+})
+
+test_that("get_node_name_by_num ignores NA node numbers", {
+  tree <- make_test_tree()
+  expect_identical(get_node_name_by_num(tree, NA), character(0))
+  expect_equal(get_node_name_by_num(tree, c(5, NA, 1)), c("n1", "A"))
+})
+
 test_that("get_node_num_by_name maps tip names correctly", {
   tree <- make_test_tree()
   expect_equal(get_node_num_by_name(tree, "A"), 1)
@@ -35,6 +51,22 @@ test_that("get_node_num_by_name maps internal node names correctly", {
   tree <- make_test_tree()
   expect_equal(get_node_num_by_name(tree, "root"), 4)
   expect_equal(get_node_num_by_name(tree, "n1"), 5)
+})
+
+test_that("get_node_num_by_name preserves input order for vectors", {
+  tree <- make_test_tree()
+  expect_equal(get_node_num_by_name(tree, c("n1", "root")), c(5, 4))
+})
+
+test_that("get_node_num_by_name returns integer(0) for empty input", {
+  tree <- make_test_tree()
+  expect_identical(get_node_num_by_name(tree, character(0)), integer(0))
+})
+
+test_that("get_node_num_by_name ignores NA node names", {
+  tree <- make_test_tree()
+  expect_identical(get_node_num_by_name(tree, NA), integer(0))
+  expect_equal(get_node_num_by_name(tree, c("n1", NA, "A")), c(5, 1))
 })
 
 test_that("get_parent_num returns correct parent for tips", {

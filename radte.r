@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-radte_version = '0.2.5'
+radte_version = '0.3.5'
 
 #devtools::install_github(repo="cran/ape", ref="master")
 
@@ -103,6 +103,16 @@ format_limited_values = function(values, max_items=50) {
     return(paste0(shown, ', ... (', length(values)-max_items, ' more)'))
 }
 
+ensure_root_event_tag = function(event_values) {
+    if (length(event_values)==0) {
+        return(event_values)
+    }
+    event_values = as.character(event_values)
+    has_root_tag = grepl('\\(R\\)$', event_values) | (event_values=='R')
+    event_values[!has_root_tag] = paste0(event_values[!has_root_tag], '(R)')
+    return(event_values)
+}
+
 # copied from rkftools https://github.com/kfuku52/rkftools
 get_node_name_by_num = function(phy, node_num) {
     if (length(node_num)==0) {
@@ -192,24 +202,24 @@ read_notung_parsable = function(file, mode='D') {
     cols = c('event', 'gn_node', 'lower_sp_node', 'upper_sp_node')
     if (mode=='D') {
         event_lines = readLines(file, warn=FALSE)
-        dup_positions = grep("^\\s*#D\\b", event_lines, perl=TRUE)
+        dup_positions = grep("^\\s*#D\\b", event_lines, perl=TRUE, ignore.case=TRUE)
         if (length(dup_positions)>0) {
             dup_lines = trimws(event_lines[dup_positions])
             dup_items = lapply(dup_lines, function(line) {
                 strsplit(line, "\\s+")[[1]]
             })
-            malformed_idx = sapply(dup_items, function(items) {
-                (length(items) > 0) && (items[[1]] == '#D') && (length(items) < 4)
-            })
+                malformed_idx = sapply(dup_items, function(items) {
+                    (length(items) > 0) && (toupper(items[[1]]) == '#D') && (length(items) < 4)
+                })
             if (any(malformed_idx)) {
                 stop('Malformed #D line(s) were found in the NOTUNG parsable file.')
             }
-            dup_items = Filter(function(items) {
-                (length(items) >= 4) &&
-                (items[[1]] == '#D') &&
-                !(
-                    (toupper(items[[2]]) == 'DUPLICATION') ||
-                    ((toupper(items[[2]]) == 'GENE') && (toupper(items[[3]]) == 'NODE'))
+                dup_items = Filter(function(items) {
+                    (length(items) >= 4) &&
+                    (toupper(items[[1]]) == '#D') &&
+                    !(
+                        (toupper(items[[2]]) == 'DUPLICATION') ||
+                        ((toupper(items[[2]]) == 'GENE') && (toupper(items[[3]]) == 'NODE'))
                 )
             }, dup_items)
             if (length(dup_items) > 0) {
@@ -1752,9 +1762,20 @@ cat('Start: gene tree processing', '\n')
 
 read_generax_nhx = function(generax_file) {
     treetext = readLines(generax_file, warn=FALSE)
-    if (length(gregexpr('\\(', treetext)[[1]])-length(gregexpr('\\)', treetext)[[1]])==-1) {
+    count_matches = function(pattern, text_vec) {
+        matches = gregexpr(pattern, text_vec, perl=TRUE)
+        return(sum(vapply(matches, function(m) {
+            if ((length(m)==1) && (m[[1]]==-1)) {
+                return(0L)
+            }
+            return(as.integer(length(m)))
+        }, integer(1))))
+    }
+    num_open = count_matches('\\(', treetext)
+    num_close = count_matches('\\)', treetext)
+    if ((num_open - num_close)==-1) {
         cat('Number of parentheses in the .nhx is not consistent. Trying to fix.')
-        treetext <- gsub("\\);", ";", treetext)
+        treetext <- gsub("\\)\\s*;", ";", treetext, perl=TRUE)
     }
     tmp_nhx_file = tempfile(pattern='radte_nhx_', fileext='.txt')
     write(treetext, tmp_nhx_file)
@@ -1958,9 +1979,11 @@ if (any(is_missing_age)) {
     )
 }
 root_num = get_root_num(gn_tree)
-if (!endsWith(gn_node_table[(gn_node_table$gn_node_num==root_num),'event'], 'R')) {
-    gn_node_table[(gn_node_table$gn_node_num==root_num),'event'] = paste0(gn_node_table[(gn_node_table$gn_node_num==root_num),'event'], '(R)')
+is_root_row = (gn_node_table$gn_node_num==root_num)
+if (sum(is_root_row) != 1) {
+    stop('Gene node table root event mapping failed: expected exactly one row for root node.')
 }
+gn_node_table[is_root_row,'event'] = ensure_root_event_tag(gn_node_table[is_root_row,'event'])
 
 constraint_conflicts_before = find_descendant_constraint_conflicts(gn_node_table, gn_tree, root_num)
 if (nrow(constraint_conflicts_before) > 0) {

@@ -240,8 +240,8 @@ test_that("RADTE calibration_all.tsv is superset of calibration_used.tsv", {
   expect_true(all(c("node", "age.min", "age.max", "soft.bounds", "event") %in% colnames(cal_all)))
   expect_true(all(c("node", "age.min", "age.max", "soft.bounds", "event") %in% colnames(cal_used)))
 
-  # Events in calibration tables should be S, R, or S(R)
-  expect_true(all(cal_all$event %in% c("S", "R", "S(R)")))
+  # calibration_all includes all candidate nodes (including duplication nodes)
+  expect_true(all(cal_all$event %in% c("S", "R", "S(R)", "D", "D(R)")))
   expect_true(all(cal_used$event %in% c("S", "R", "S(R)")))
 
   # All ages should be non-negative
@@ -295,6 +295,43 @@ test_that("RADTE GeneRax mode gene tree TSV has correct structure", {
   # Output tree tip labels should match GeneRax input
   out_tree <- read.tree(file.path(out_dir, "radte_gene_tree_output.nwk"))
   expect_true(is.ultrametric(out_tree))
+})
+
+test_that("RADTE GeneRax mode accepts boolean duplication tag values", {
+  skip_if_not(requireNamespace("treeio", quietly = TRUE), "treeio not installed")
+
+  sp_file <- tempfile(fileext = ".nwk")
+  writeLines("(A_sp:1,B_sp:1)root;", sp_file)
+  on.exit(unlink(sp_file))
+
+  nhx_file <- tempfile(fileext = ".nhx")
+  writeLines(
+    "((A_sp_g1:0.1[&&NHX:S=A_sp:D=false],A_sp_g2:0.1[&&NHX:S=A_sp:D=false])n1:0.1[&&NHX:S=A_sp:D=true],B_sp_g1:0.2[&&NHX:S=B_sp:D=false])n2:0.1[&&NHX:S=root:D=false];",
+    nhx_file
+  )
+  on.exit(unlink(nhx_file), add = TRUE)
+
+  out_dir <- file.path(tempdir(), "radte_grax_boolean_d")
+  dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
+  on.exit(unlink(out_dir, recursive = TRUE), add = TRUE)
+
+  cmd <- paste(
+    "Rscript", shQuote(radte_script),
+    paste0("--species_tree=", shQuote(sp_file)),
+    paste0("--generax_nhx=", shQuote(nhx_file)),
+    "--max_age=100", "--chronos_lambda=1", "--chronos_model=discrete",
+    "--pad_short_edge=0.001"
+  )
+
+  old_wd <- getwd()
+  setwd(out_dir)
+  on.exit(setwd(old_wd), add = TRUE)
+
+  exit_code <- system(cmd, ignore.stdout = TRUE, ignore.stderr = TRUE)
+  expect_equal(exit_code, 0)
+
+  gn_tsv <- read.delim(file.path(out_dir, "radte_gene_tree.tsv"))
+  expect_true(any(grepl("^D", gn_tsv$event)))
 })
 
 # --- NOTUNG mode with duplication: output tree tip count matches input ---
@@ -535,4 +572,56 @@ test_that("RADTE handles gene tree with moderately large branch lengths", {
   out_tree <- read.tree(file.path(out_dir, "radte_gene_tree_output.nwk"))
   expect_true(inherits(out_tree, "phylo"))
   expect_true(is.ultrametric(out_tree))
+})
+
+test_that("RADTE stabilizes risky descendant constraints without dropping RS constraints", {
+  sp_file <- tempfile(fileext = ".nwk")
+  writeLines("((A_sp:10,B_sp:10)s1:20,C_sp:30)sroot;", sp_file)
+  on.exit(unlink(sp_file))
+
+  gn_file <- tempfile(fileext = ".nwk")
+  writeLines(
+    "(((A_sp_g1:0.1,B_sp_g1:0.1)n1:0.1,(A_sp_g2:0.1,B_sp_g2:0.1)n2:0.1)n3:0.2,C_sp_g1:0.4)n4;",
+    gn_file
+  )
+  on.exit(unlink(gn_file), add = TRUE)
+
+  parsable_file <- tempfile(fileext = ".txt")
+  writeLines(c(
+    "1\t0\t0\t0\t5\t9\t3\t0.1,0.4\tOff\t1\t1\t1.5\t0.0\t3.0\t1.0",
+    "nD\tnCD\tnT\tnL\t|L(G)|\t|G|\t|S|\tminEW,maxEW\tRoots\tCand\tFeas\tcD\tcCD\tcT\tcL",
+    "",
+    "#D\tDuplication\tL.Bound\tU.Bound",
+    "#D\tn1\tA_sp\ts1"
+  ), parsable_file)
+  on.exit(unlink(parsable_file), add = TRUE)
+
+  out_dir <- file.path(tempdir(), "radte_constraint_stabilization")
+  dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
+  on.exit(unlink(out_dir, recursive = TRUE), add = TRUE)
+
+  cmd <- paste(
+    "Rscript", shQuote(radte_script),
+    paste0("--species_tree=", shQuote(sp_file)),
+    paste0("--gene_tree=", shQuote(gn_file)),
+    paste0("--notung_parsable=", shQuote(parsable_file)),
+    "--max_age=1000", "--chronos_lambda=1", "--chronos_model=discrete",
+    "--pad_short_edge=0.001", "--allow_constraint_drop=false"
+  )
+
+  old_wd <- getwd()
+  setwd(out_dir)
+  on.exit(setwd(old_wd), add = TRUE)
+
+  exit_code <- system(cmd, ignore.stdout = TRUE, ignore.stderr = TRUE)
+  expect_equal(exit_code, 0)
+
+  cal_nodes <- readLines(file.path(out_dir, "radte_calibrated_nodes.txt"))
+  expect_equal(cal_nodes[1], "RS")
+
+  cal_used <- read.delim(file.path(out_dir, "radte_calibration_used.tsv"))
+  expect_equal(sum(cal_used$event == "R"), 1)
+  expect_equal(sum(cal_used$event == "S"), 2)
+  expect_equal(nrow(cal_used), 3)
+  expect_true(any(cal_used$event == "S" & cal_used$age.max < 10))
 })

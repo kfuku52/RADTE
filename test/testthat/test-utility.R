@@ -25,6 +25,11 @@ test_that("leaf2species warns for names with fewer than 3 parts", {
   expect_warning(leaf2species(leaves))
 })
 
+test_that("leaf2species handles empty input", {
+  result <- leaf2species(character(0))
+  expect_equal(length(result), 0)
+})
+
 # --- transfer_node_labels ---
 
 test_that("transfer_node_labels transfers labels between trees with same topology", {
@@ -55,4 +60,14 @@ test_that("check_gn_node_name_uniqueness errors for non-existent node names", {
   tree <- read.tree(text = "((A:1,B:1)n1:1,C:2)root;")
   gn_table <- data.frame(gn_node = c("nonexistent"), stringsAsFactors = FALSE)
   expect_error(check_gn_node_name_uniqueness(gn_table, tree))
+})
+
+# --- ensure_root_event_tag ---
+
+test_that("ensure_root_event_tag appends root marker only when missing", {
+  expect_equal(ensure_root_event_tag("S"), "S(R)")
+  expect_equal(ensure_root_event_tag("D"), "D(R)")
+  expect_equal(ensure_root_event_tag("S(R)"), "S(R)")
+  expect_equal(ensure_root_event_tag("D(R)"), "D(R)")
+  expect_equal(ensure_root_event_tag("R"), "R")
 })

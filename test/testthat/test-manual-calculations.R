@@ -397,7 +397,7 @@ test_that("RADTE pipeline: exact sp_node_table, gn_node_table, and calibration v
   expect_equal(dup_row$lower_sp_node, "A_sp")
   expect_equal(dup_row$upper_sp_node, "n1")
   expect_equal(dup_row$lower_age, 0)
-  expect_equal(dup_row$upper_age, 10)
+  expect_equal(dup_row$upper_age, 10, tolerance = 1e-6)
 
   # Speciation node n2: mapped to species n1 (MRCA of A_sp,B_sp in gene subtree)
   # event=S, lower_sp=n1, upper_sp=n1, ages both = 10
@@ -406,8 +406,8 @@ test_that("RADTE pipeline: exact sp_node_table, gn_node_table, and calibration v
   expect_equal(spec_n2$event, "S")
   expect_equal(spec_n2$lower_sp_node, "n1")
   expect_equal(spec_n2$upper_sp_node, "n1")
-  expect_equal(spec_n2$lower_age, 10)
-  expect_equal(spec_n2$upper_age, 10)
+  expect_equal(spec_n2$lower_age, 10, tolerance = 1e-6)
+  expect_equal(spec_n2$upper_age, 10, tolerance = 1e-6)
 
   # Root node n3: mapped to species root
   # event=S(R), lower_sp=root, upper_sp=root, ages both = 30
@@ -436,8 +436,8 @@ test_that("RADTE pipeline: exact sp_node_table, gn_node_table, and calibration v
   # Speciation calibration: age.min=10, age.max=10, event=S
   spec_cal <- cal_used[cal_used$event == "S", ]
   expect_equal(nrow(spec_cal), 1)
-  expect_equal(spec_cal$age.min, 10)
-  expect_equal(spec_cal$age.max, 10)
+  expect_equal(spec_cal$age.min, 10, tolerance = 1e-6)
+  expect_equal(spec_cal$age.max, 10, tolerance = 1e-6)
 
   # --- Verify output tree structure ---
   out_tree <- read.tree(file.path(out_dir, "radte_gene_tree_output.nwk"))

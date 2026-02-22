@@ -64,6 +64,115 @@ test_that("read_notung_parsable handles species with underscore names", {
   expect_equal(result$upper_sp_node[1], "n_root")
 })
 
+test_that("read_notung_parsable handles duplication rows without header line", {
+  tmp <- tempfile(fileext = ".txt")
+  writeLines(c(
+    "2\t0\t0\t0\t3\t5\t3\t0.1,1.0\tOff\t1\t1\t1.5\t0.0\t3.0\t1.0",
+    "nD\tnCD\tnT\tnL\t|L(G)|\t|G|\t|S|\tminEW,maxEW\tRoots\tCand\tFeas\tcD\tcCD\tcT\tcL",
+    "",
+    "#D\tn1\tSpeciesA\troot",
+    "#D\tn2\tSpeciesB\troot"
+  ), tmp)
+  on.exit(unlink(tmp))
+
+  result <- read_notung_parsable(tmp, mode = "D")
+  expect_equal(nrow(result), 2)
+  expect_equal(result$gn_node, c("n1", "n2"))
+  expect_equal(result$lower_sp_node, c("SpeciesA", "SpeciesB"))
+})
+
+test_that("read_notung_parsable errors on malformed duplication rows", {
+  tmp <- tempfile(fileext = ".txt")
+  writeLines(c(
+    "1\t0\t0\t0\t3\t5\t3\t0.1,1.0\tOff\t1\t1\t1.5\t0.0\t3.0\t1.0",
+    "nD\tnCD\tnT\tnL\t|L(G)|\t|G|\t|S|\tminEW,maxEW\tRoots\tCand\tFeas\tcD\tcCD\tcT\tcL",
+    "",
+    "#D\tbad_row\tSpeciesA"
+  ), tmp)
+  on.exit(unlink(tmp))
+
+  expect_error(
+    read_notung_parsable(tmp, mode = "D"),
+    "Malformed #D line"
+  )
+})
+
+test_that("read_notung_parsable accepts #D rows with leading whitespace", {
+  tmp <- tempfile(fileext = ".txt")
+  writeLines(c(
+    "1\t0\t0\t0\t3\t5\t3\t0.1,1.0\tOff\t1\t1\t1.5\t0.0\t3.0\t1.0",
+    "nD\tnCD\tnT\tnL\t|L(G)|\t|G|\t|S|\tminEW,maxEW\tRoots\tCand\tFeas\tcD\tcCD\tcT\tcL",
+    "",
+    "   #D\tn1\tSpeciesA\troot",
+    "\t#D\tn2\tSpeciesB\troot"
+  ), tmp)
+  on.exit(unlink(tmp))
+
+  result <- read_notung_parsable(tmp, mode = "D")
+  expect_equal(nrow(result), 2)
+  expect_equal(result$gn_node, c("n1", "n2"))
+})
+
+test_that("read_notung_parsable accepts lowercase #d rows", {
+  tmp <- tempfile(fileext = ".txt")
+  writeLines(c(
+    "1\t0\t0\t0\t3\t5\t3\t0.1,1.0\tOff\t1\t1\t1.5\t0.0\t3.0\t1.0",
+    "nD\tnCD\tnT\tnL\t|L(G)|\t|G|\t|S|\tminEW,maxEW\tRoots\tCand\tFeas\tcD\tcCD\tcT\tcL",
+    "",
+    "#d\tn1\tSpeciesA\troot",
+    "#d\tn2\tSpeciesB\troot"
+  ), tmp)
+  on.exit(unlink(tmp))
+
+  result <- read_notung_parsable(tmp, mode = "D")
+  expect_equal(nrow(result), 2)
+  expect_equal(result$gn_node, c("n1", "n2"))
+})
+
+test_that("read_notung_parsable does not modify stringsAsFactors option", {
+  tmp <- tempfile(fileext = ".txt")
+  writeLines(c(
+    "#D\tn1\tSpeciesA\troot"
+  ), tmp)
+  on.exit(unlink(tmp))
+
+  original_opt <- getOption("stringsAsFactors")
+  on.exit(options(stringsAsFactors = original_opt), add = TRUE)
+  suppressWarnings(options(stringsAsFactors = TRUE))
+
+  read_notung_parsable(tmp, mode = "D")
+  expect_true(isTRUE(getOption("stringsAsFactors")))
+})
+
+test_that("read_notung_parsable ignores '#D Gene Node' header rows", {
+  tmp <- tempfile(fileext = ".txt")
+  writeLines(c(
+    "1\t0\t0\t0\t3\t5\t3\t0.1,1.0\tOff\t1\t1\t1.5\t0.0\t3.0\t1.0",
+    "#D\tGene Node\tL. Bound\tU. Bound",
+    "#D\tn1\tSpeciesA\troot"
+  ), tmp)
+  on.exit(unlink(tmp))
+
+  result <- read_notung_parsable(tmp, mode = "D")
+  expect_equal(nrow(result), 1)
+  expect_equal(result$gn_node[1], "n1")
+})
+
+test_that("read_notung_parsable converts N/A-like node placeholders to NA", {
+  tmp <- tempfile(fileext = ".txt")
+  writeLines(c(
+    "1\t0\t0\t0\t3\t5\t3\t0.1,1.0\tOff\t1\t1\t1.5\t0.0\t3.0\t1.0",
+    "#D\tn1\tN/A\tNA",
+    "#D\tn2\tnone\t-"
+  ), tmp)
+  on.exit(unlink(tmp))
+
+  result <- read_notung_parsable(tmp, mode = "D")
+  expect_equal(nrow(result), 2)
+  expect_true(all(is.na(result$lower_sp_node)))
+  expect_true(all(is.na(result$upper_sp_node)))
+})
+
 # --- Parsable file with extra whitespace lines ---
 
 test_that("read_notung_parsable is robust to trailing blank lines", {
@@ -91,6 +200,43 @@ test_that("read_generax_nhx handles NHX with extra closing paren", {
 
   # Simulate an NHX where there's one extra ) — the code strips ); to ;
   nhx_text <- "((A:0.1[&&NHX:S=sp1:D=N],B:0.2[&&NHX:S=sp2:D=N])n1:0.3[&&NHX:S=root:D=Y]);"
+  nhx_file <- tempfile(fileext = ".nhx")
+  writeLines(nhx_text, nhx_file)
+  on.exit(unlink(nhx_file))
+
+  old_wd <- getwd()
+  setwd(tempdir())
+  on.exit(setwd(old_wd), add = TRUE)
+
+  result <- read_generax_nhx(nhx_file)
+  expect_true(inherits(result, "treedata"))
+  expect_equal(length(result@phylo$tip.label), 2)
+})
+
+test_that("read_generax_nhx handles multiline NHX with extra closing paren", {
+  skip_if_not(requireNamespace("treeio", quietly = TRUE), "treeio not installed")
+
+  nhx_text <- c(
+    "((A:0.1[&&NHX:S=sp1:D=N],B:0.2[&&NHX:S=sp2:D=N])n1:0.3[&&NHX:S=sp_root:D=Y],",
+    "C:0.2[&&NHX:S=sp3:D=N])n2:0.4[&&NHX:S=sp_root:D=N]);"
+  )
+  nhx_file <- tempfile(fileext = ".nhx")
+  writeLines(nhx_text, nhx_file)
+  on.exit(unlink(nhx_file))
+
+  old_wd <- getwd()
+  setwd(tempdir())
+  on.exit(setwd(old_wd), add = TRUE)
+
+  result <- read_generax_nhx(nhx_file)
+  expect_true(inherits(result, "treedata"))
+  expect_equal(length(result@phylo$tip.label), 3)
+})
+
+test_that("read_generax_nhx handles extra closing paren with spaces before semicolon", {
+  skip_if_not(requireNamespace("treeio", quietly = TRUE), "treeio not installed")
+
+  nhx_text <- "((A:0.1[&&NHX:S=sp1:D=N],B:0.2[&&NHX:S=sp2:D=N])n1:0.3[&&NHX:S=sp_root:D=Y])) ;"
   nhx_file <- tempfile(fileext = ".nhx")
   writeLines(nhx_text, nhx_file)
   on.exit(unlink(nhx_file))
