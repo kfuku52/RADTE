@@ -24,7 +24,15 @@ In addition to the above dependencies, RADTE needs an output from a phylogeny re
 * [GeneRax](https://github.com/BenoitMorel/GeneRax)
 
 ## Installation
-After installing the above dependencies, please download the `radte.r` script by, for example, `git` or `svn`, and change the file permission. 
+### Option 1: Bioconda (recommended)
+RADTE is available on Bioconda.
+```
+# Direct install into current environment
+conda install bioconda::radte
+```
+
+### Option 2: Source script (development/latest repository version)
+If you want the latest repository code, download the `radte.r` script by, for example, `git` or `svn`, and change the file permission.
 You can also download a zipped repository from `Code -> Download ZIP` above.
 ```
 # With git
@@ -57,6 +65,8 @@ Use the tree that **NOTUNG** produces because its internal nodes are correctly l
 An output file from **NOTUNG** (tested with version 2.9) can be used to acquire the species–gene relationships in phylogeny reconciliation. See **Examples** for details.
 #### `--generax_nhx`
 Instead of the **NOTUNG** output, the NHX tree from **GeneRax** can also be used as an input. If specified, `--gene_tree` and `--notung_parsable` will be ignored. See **Examples** for details.
+The NHX species annotation tag `S` is required for all nodes and must match species-tree node labels.
+The duplication tag `D` is optional (missing values are treated as non-duplication). Accepted duplication values are `Y`, `YES`, `TRUE`, `T`, `1`; accepted non-duplication values are `N`, `NO`, `FALSE`, `F`, `0`.
 #### `--max_age`
 If duplication nodes are deeper than the root node of the species tree, this value will be used as an upper limit of the root node.
 #### `--chronos_lambda`
@@ -188,8 +198,12 @@ RADTE includes a comprehensive test suite using `testthat`. To run the tests:
 Rscript -e 'install.packages(c("testthat", "ape"), repos="https://cloud.r-project.org")'
 Rscript -e 'install.packages("BiocManager", repos="https://cloud.r-project.org"); BiocManager::install("treeio")'
 
-# Run tests
+# Run tests (default: full)
 Rscript test/run_tests.R
+
+# Explicit profiles
+RADTE_TEST_PROFILE=full Rscript test/run_tests.R
+RADTE_TEST_PROFILE=fast Rscript test/run_tests.R
 ```
 
 ## Citation
