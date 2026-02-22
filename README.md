@@ -62,9 +62,27 @@ If duplication nodes are deeper than the root node of the species tree, this val
 #### `--chronos_lambda`
 Passed to `chronos` for divergence time estimation. See `chronos` in the [**ape** documentation](https://www.rdocumentation.org/packages/ape/versions/5.2/topics/chronos).
 #### `--chronos_model`
-Passed to `chronos` for divergence time estimation. See `chronos` in the [**ape** documentation](https://www.rdocumentation.org/packages/ape/versions/5.2/topics/chronos).
+Passed to `chronos` for divergence time estimation. Supported values are `discrete`, `relaxed`, and `correlated`.
+If an unsupported value is given (e.g., typo like `difscrete`), RADTE now exits with a clear error and suggestion.
+See `chronos` in the [**ape** documentation](https://www.rdocumentation.org/packages/ape/versions/5.2/topics/chronos).
 #### `--pad_short_edge`
 Prohibit dated branches shorter than this value. If detected, the branch length is readjusted by transferring a small portion of branch length from the parent branch.
+#### `--allow_constraint_drop`
+`true`/`false` (`1`/`0`, `yes`/`no` are also accepted).  
+Default is `true`.
+RADTE now first tries to keep all root/speciation constraints by stabilizing conflict-prone bounds.
+In this no-drop phase, RADTE also performs multi-seed retries and soft-bound retries (plus alternative `chronos` model/`lambda` trials) to avoid numerical failures.
+If these `chronos` retries still fail and `--allow_constraint_drop=false`, RADTE uses a deterministic no-drop fallback (constraint-preserving node dating without dropping calibration nodes).
+If this option is `true`, RADTE runs the same exhaustive retry pipeline stage-by-stage while dropping constraints in order (`RS` -> `S` -> `R`), moving to the next stage only after the current stage is exhausted.
+Set `--allow_constraint_drop=false` to disable `S/R` drop stages and keep the run strictly no-drop.
+#### `--chronos_attempt_timeout_sec`
+Per-attempt timeout (seconds) for each `chronos` call.  
+Use a non-negative number, or `inf`/`none`/`off` to disable per-attempt timeout.
+When `--allow_constraint_drop=false`, RADTE now defaults to `60` seconds to avoid infinite waits and then proceeds to no-drop fallback.
+#### `--chronos_total_timeout_sec`
+Total timeout budget (seconds) across all `chronos` retries (RS + retry strategies + S/R if enabled).  
+Use a non-negative number, or `inf`/`none`/`off` to disable total budgeting.
+When `--allow_constraint_drop=false`, RADTE now defaults to `300` seconds.
 
 ## Example 1: RADTE after NOTUNG
 For input data, see `data/example_notung_01`.
@@ -143,7 +161,8 @@ This table contains all identified calibration nodes where the divergence time m
 
 #### radte_calibration_used.tsv
 This table is a subset of `radte_calibration_all.tsv` and contain only calibration nodes that are used to transfer the divergence time.
-A part of calibration points may be dropped if the estimation with all available nodes failed.
+RADTE first stabilizes risky descendant/ancestor bounds to keep constraints without dropping nodes.
+If `--allow_constraint_drop=true` (default), a part of calibration points may still be dropped only when all no-drop attempts fail.
 
 #### radte_gene_tree.tsv
 This table summarizes gene tree nodes. 
@@ -158,8 +177,8 @@ This table summarizes species tree nodes.
 This file records what types of gene tree nodes are constrained in the divergence time estimation.
 RADTE first attempts to constrain all available calibration points transferred from the species tree (**R**, root node; **S**, speciation node) for the divergence time estimation by `chronos` from the **ape** package.
 If the estimation succeeded, the content of this file should be **RS**, because both **R** and **S** nodes were used.
-If the first estimation failed, the constraints are gradually relaxed until successful estimation is obtained.
-As of version 0.2.0, the order of trials is as follows: **RS** -> **S** -> **R**. 
+If the first estimation failed, RADTE retries while preserving **RS** by stabilizing risky bounds, edge scaling, multi-seed restarts, and soft-bound/alternative-parameter retries.
+If all **RS** retries fail and `--allow_constraint_drop=true`, RADTE repeats the same exhaustive retry pipeline at **S**, then at **R** (order: **RS** -> **S** -> **R**).
 This differs from the method described in Fukushima and Pollock (2020), where duplication nodes (**D**) may be constrained with the upper and lower limits.
 
 ## Testing

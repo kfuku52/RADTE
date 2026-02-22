@@ -49,3 +49,69 @@ test_that("get_parsed_args handles negative numeric value", {
   expect_true(is.numeric(result$offset))
   expect_equal(result$offset, -10.5)
 })
+
+test_that("get_parsed_args returns empty list for empty input", {
+  result <- get_parsed_args(character(0), print = FALSE)
+  expect_equal(length(result), 0)
+})
+
+test_that("get_parsed_args preserves equals signs in argument values", {
+  args <- c("--gene_tree=/tmp/a=b.nwk")
+  result <- get_parsed_args(args, print = FALSE)
+  expect_equal(result$gene_tree, "/tmp/a=b.nwk")
+})
+
+test_that("get_parsed_args errors for arguments without equals sign", {
+  expect_error(
+    get_parsed_args(c("--species_tree"), print = FALSE),
+    "key=value"
+  )
+})
+
+test_that("get_parsed_args errors when argument does not start with --", {
+  expect_error(
+    get_parsed_args(c("species_tree=sp.nwk"), print = FALSE),
+    "key=value"
+  )
+})
+
+test_that("get_parsed_args errors when key is empty", {
+  expect_error(
+    get_parsed_args(c("--=sp.nwk"), print = FALSE),
+    "key is empty"
+  )
+})
+
+test_that("get_parsed_args errors when the same key is specified multiple times", {
+  expect_error(
+    get_parsed_args(c("--max_age=10", "--max_age=20"), print = FALSE),
+    "duplicated"
+  )
+})
+
+test_that("parse_bool_arg accepts common true/false representations", {
+  expect_true(parse_bool_arg("true", "--x"))
+  expect_true(parse_bool_arg("YES", "--x"))
+  expect_false(parse_bool_arg("0", "--x"))
+  expect_true(parse_bool_arg(1, "--x"))
+  expect_false(parse_bool_arg(FALSE, "--x"))
+})
+
+test_that("parse_bool_arg errors on invalid boolean value", {
+  expect_error(parse_bool_arg("maybe", "--x"), "boolean")
+})
+
+test_that("parse_timeout_arg accepts infinite and zero timeout representations", {
+  parsed <- get_parsed_args(c("--timeout=inf"), print = FALSE)
+  expect_true(is.infinite(parsed$timeout))
+  expect_true(is.infinite(parse_timeout_arg(parsed$timeout, "--timeout")))
+  expect_true(is.infinite(parse_timeout_arg("inf", "--timeout")))
+  expect_true(is.infinite(parse_timeout_arg("off", "--timeout")))
+  expect_true(is.infinite(parse_timeout_arg(Inf, "--timeout")))
+  expect_true(is.infinite(parse_timeout_arg(0, "--timeout")))
+})
+
+test_that("parse_timeout_arg rejects negative timeout values including -Inf", {
+  expect_error(parse_timeout_arg(-1, "--timeout"), "non-negative")
+  expect_error(parse_timeout_arg(-Inf, "--timeout"), "non-negative")
+})
