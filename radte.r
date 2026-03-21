@@ -338,7 +338,7 @@ is_nonempty_scalar_string = function(value) {
 }
 
 get_species_parser_names = function() {
-    return(c('legacy', 'qualified', 'regex', 'map'))
+    return(c('legacy', 'taxonomic', 'regex', 'map'))
 }
 
 detect_species_map_has_header = function(file) {
@@ -448,9 +448,6 @@ build_species_parser = function(parser_name='legacy', species_regex=NULL, specie
         stop('--species-parser should be a non-empty string.')
     }
     parser_name = tolower(trimws(as.character(parser_name)))
-    if (parser_name == 'qualified_gg') {
-        parser_name = 'qualified'
-    }
     supported = get_species_parser_names()
     if (!parser_name %in% supported) {
         stop('--species-parser should be one of: ', paste(supported, collapse=', '))
@@ -536,7 +533,7 @@ get_invalid_tip_label_message = function(species_parser, invalid_labels) {
     )
 }
 
-infer_qualified_species_token_count = function(tokens) {
+infer_taxonomic_species_token_count = function(tokens) {
     if (length(tokens) < 2) {
         return(0)
     }
@@ -594,7 +591,7 @@ species_parser_get_gene_species = function(species_parser, tip_labels, species_t
             }
             return(paste0(genus, species_parser[['sep']], species))
         }, character(1))
-    } else if (parser_name == 'qualified') {
+    } else if (parser_name == 'taxonomic') {
         split_labels = strsplit(tip_labels, '_', fixed=TRUE)
         species_names = vapply(seq_along(split_labels), function(i) {
             items = split_labels[[i]]
@@ -614,7 +611,7 @@ species_parser_get_gene_species = function(species_parser, tip_labels, species_t
                     return(NA_character_)
                 }
             }
-            species_token_count = infer_qualified_species_token_count(items)
+            species_token_count = infer_taxonomic_species_token_count(items)
             if ((species_token_count < 2) || (length(items) <= species_token_count)) {
                 return(NA_character_)
             }

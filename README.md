@@ -50,7 +50,7 @@ chmod +x ./radte.r
 #### `--species_tree`
 Species tree with estimated divergence time.
 By default, leaves (species) should be labeled as `GENUS_SPECIES` (e.g., Homo_sapiens).
-If `--species-parser=qualified` is used, qualified labels such as `Dictyostelium_discoideum_cf` are also accepted.
+If `--species-parser=taxonomic` is used, taxonomically qualified labels such as `Dictyostelium_discoideum_cf` are also accepted.
 The tree is expected to be ultrametric and branch lengths should represent evolutionary time (e.g., million years).
 Internal nodes including the root node must be uniquely labeled and the same file should be consistently used for **NOTUNG/GeneRax** and **RADTE**.
 Don't know how to label internal nodes? Try this R one-liner.
@@ -61,7 +61,7 @@ write.tree(t, 'species_tree.nwk')"
 ```
 #### `--gene_tree`
 Rooted newick tree. By default, leaves (genes) should be labeled as `GENUS_SPECIES_GENEID` (e.g., Homo_sapiens_ENSG00000102144).
-If `--species-parser` is switched to `qualified`, `regex`, or `map`, gene tips are interpreted with that parser instead.
+If `--species-parser` is switched to `taxonomic`, `regex`, or `map`, gene tips are interpreted with that parser instead.
 The tree is expected to be non-ultrametric and branch lengths should represent substitutions per site. 
 Use the tree that **NOTUNG** produces because its internal nodes are correctly labeled in accordance with the **NOTUNG parsable file**, another input for this program.
 #### `--notung_parsable`
@@ -74,8 +74,7 @@ The duplication tag `D` is optional (missing values are treated as non-duplicati
 Optional species-label parser. Default is `legacy`.
 Supported values are:
 * `legacy`: current `GENUS_SPECIES` / `GENUS_SPECIES_GENEID` behavior.
-* `qualified`: accepts qualified species labels such as `Dictyostelium_discoideum_cf_gene123` or `Arabidopsis_thaliana_subsp_lyrata_gene456`.
-  The legacy name `qualified_gg` is retained as an alias for backward compatibility.
+* `taxonomic`: accepts taxonomically qualified species labels such as `Dictyostelium_discoideum_cf_gene123` or `Arabidopsis_thaliana_subsp_lyrata_gene456`.
 * `regex`: extracts species labels from gene tips using `--species-regex`.
 * `map`: resolves species labels from `--species-map-tsv`.
 #### `--species-regex`

@@ -33,8 +33,8 @@ test_that("species parser defaults to legacy behavior", {
   expect_no_error(validate_gene_tip_labels(tree$tip.label))
 })
 
-test_that("qualified parser accepts qualified species labels", {
-  parser <- build_species_parser("qualified")
+test_that("taxonomic parser accepts qualified species labels", {
+  parser <- build_species_parser("taxonomic")
   species_tips <- c(
     "Dictyostelium_discoideum_cf",
     "Arabidopsis_thaliana_subsp_lyrata",
@@ -72,13 +72,6 @@ test_that("qualified parser accepts qualified species labels", {
       "Arabidopsis thaliana subsp lyrata",
       "Escherichia sp K12"
     )
-  )
-})
-
-test_that("qualified_gg remains an alias of qualified", {
-  expect_equal(
-    build_species_parser("qualified_gg")[["name"]],
-    "qualified"
   )
 })
 
@@ -125,7 +118,7 @@ test_that("map parser extracts species labels from TSV", {
   )
 })
 
-test_that("RADTE allS mode maps mixed legacy and qualified species labels", {
+test_that("RADTE allS mode maps mixed legacy and taxonomic species labels", {
   sp_file <- tempfile(fileext = ".nwk")
   writeLines(
     "((Homo_sapiens:10,Dictyostelium_discoideum_cf:10)n1:10,Arabidopsis_thaliana_subsp_lyrata:20)root;",
@@ -156,7 +149,7 @@ test_that("RADTE allS mode maps mixed legacy and qualified species labels", {
     paste0("--species_tree=", shQuote(sp_file)),
     paste0("--gene_tree=", shQuote(gn_file)),
     paste0("--notung_parsable=", shQuote(parsable_file)),
-    "--species-parser=qualified",
+    "--species-parser=taxonomic",
     "--max_age=1000",
     "--chronos_lambda=1",
     "--chronos_model=discrete",
