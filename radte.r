@@ -542,10 +542,25 @@ infer_taxonomic_species_token_count = function(tokens) {
     if (length(tokens) >= 3) {
         token3 = tolower(tokens[[3]])
     }
-    if ((length(tokens) >= 5) && (token3 %in% c('subsp', 'ssp', 'var', 'forma', 'f', 'subspecies', 'strain'))) {
+    genus_only_placeholders = c('sp', 'spp')
+    single_token_qualifiers = c('cf', 'aff', 'nr', 'x')
+    paired_token_qualifiers = c(
+        'subsp', 'ssp', 'subspecies',
+        'var', 'variety',
+        'forma', 'form', 'f',
+        'strain', 'substrain',
+        'serovar', 'serotype', 'serogroup',
+        'pathovar', 'pv',
+        'biovar', 'biotype', 'chemovar', 'morphovar',
+        'cultivar', 'cv',
+        'isolate',
+        'group', 'subgroup', 'complex', 'clade', 'lineage',
+        'section', 'series', 'ecotype', 'breed'
+    )
+    if ((length(tokens) >= 5) && (token3 %in% paired_token_qualifiers)) {
         return(4)
     }
-    if ((length(tokens) >= 4) && ((token2 %in% c('sp', 'cf', 'aff', 'nr')) || (token3 %in% c('cf', 'aff', 'sp', 'nr', 'group', 'complex', 'clade', 'lineage')))) {
+    if ((length(tokens) >= 4) && ((token2 %in% c(genus_only_placeholders, single_token_qualifiers)) || (token3 %in% c(single_token_qualifiers, genus_only_placeholders)))) {
         return(3)
     }
     return(2)

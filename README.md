@@ -50,7 +50,7 @@ chmod +x ./radte.r
 #### `--species_tree`
 Species tree with estimated divergence time.
 By default, leaves (species) should be labeled as `GENUS_SPECIES` (e.g., Homo_sapiens).
-If `--species-parser=taxonomic` is used, taxonomically qualified labels such as `Dictyostelium_discoideum_cf` are also accepted.
+If `--species-parser=taxonomic` is used, taxonomically qualified labels such as `Dictyostelium_cf_discoideum` are also accepted.
 The tree is expected to be ultrametric and branch lengths should represent evolutionary time (e.g., million years).
 Internal nodes including the root node must be uniquely labeled and the same file should be consistently used for **NOTUNG/GeneRax** and **RADTE**.
 Don't know how to label internal nodes? Try this R one-liner.
@@ -74,7 +74,7 @@ The duplication tag `D` is optional (missing values are treated as non-duplicati
 Optional species-label parser. Default is `legacy`.
 Supported values are:
 * `legacy`: current `GENUS_SPECIES` / `GENUS_SPECIES_GENEID` behavior.
-* `taxonomic`: accepts taxonomically qualified species labels such as `Dictyostelium_discoideum_cf_gene123` or `Arabidopsis_thaliana_subsp_lyrata_gene456`.
+* `taxonomic`: accepts taxonomically qualified species labels such as `Dictyostelium_cf_discoideum_gene123` or `Arabidopsis_thaliana_subsp_lyrata_gene456`.
 * `regex`: extracts species labels from gene tips using `--species-regex`.
 * `map`: resolves species labels from `--species-map-tsv`.
 #### `--species-regex`

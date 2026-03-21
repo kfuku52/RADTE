@@ -36,14 +36,18 @@ test_that("species parser defaults to legacy behavior", {
 test_that("taxonomic parser accepts qualified species labels", {
   parser <- build_species_parser("taxonomic")
   species_tips <- c(
-    "Dictyostelium_discoideum_cf",
+    "Dictyostelium_cf_discoideum",
     "Arabidopsis_thaliana_subsp_lyrata",
-    "Escherichia_sp_K12"
+    "Escherichia_sp_K12",
+    "Solanum_lycopersicum_cultivar_Heinz1706",
+    "Escherichia_coli_serovar_O157"
   )
   gene_tips <- c(
-    "Dictyostelium_discoideum_cf_gene123",
+    "Dictyostelium_cf_discoideum_gene123",
     "Arabidopsis_thaliana_subsp_lyrata_gene456",
-    "Escherichia_sp_K12_gene789"
+    "Escherichia_sp_K12_gene789",
+    "Solanum_lycopersicum_cultivar_Heinz1706_gene321",
+    "Escherichia_coli_serovar_O157_gene654"
   )
 
   expect_no_error(
@@ -68,9 +72,11 @@ test_that("taxonomic parser accepts qualified species labels", {
       species_tree_labels = species_tips
     ),
     c(
-      "Dictyostelium discoideum cf",
+      "Dictyostelium cf discoideum",
       "Arabidopsis thaliana subsp lyrata",
-      "Escherichia sp K12"
+      "Escherichia sp K12",
+      "Solanum lycopersicum cultivar Heinz1706",
+      "Escherichia coli serovar O157"
     )
   )
 })
@@ -81,14 +87,14 @@ test_that("regex parser extracts species labels from custom tip format", {
     species_regex = "^[^|]+\\|([^|]+)\\|[^|]+$"
   )
   gene_tips <- c(
-    "tip1|Dictyostelium_discoideum_cf|gene123",
+    "tip1|Dictyostelium_cf_discoideum|gene123",
     "tip2|Homo_sapiens|gene456"
   )
 
   expect_no_error(validate_gene_tip_labels(gene_tips, species_parser = parser))
   expect_equal(
     species_parser_get_gene_species(parser, gene_tips),
-    c("Dictyostelium_discoideum_cf", "Homo_sapiens")
+    c("Dictyostelium_cf_discoideum", "Homo_sapiens")
   )
 })
 
@@ -97,7 +103,7 @@ test_that("map parser extracts species labels from TSV", {
   writeLines(
     c(
       "label\tspecies\ttaxonomy_query",
-      "seq1\tDictyostelium_discoideum_cf\tDictyostelium discoideum cf",
+      "seq1\tDictyostelium_cf_discoideum\tDictyostelium cf discoideum",
       "seq2\tHomo_sapiens\tHomo sapiens"
     ),
     map_file
@@ -110,25 +116,25 @@ test_that("map parser extracts species labels from TSV", {
   expect_no_error(validate_gene_tip_labels(gene_tips, species_parser = parser))
   expect_equal(
     species_parser_get_gene_species(parser, gene_tips),
-    c("Dictyostelium_discoideum_cf", "Homo_sapiens")
+    c("Dictyostelium_cf_discoideum", "Homo_sapiens")
   )
   expect_equal(
     leaf2species(gene_tips, species_parser = parser),
-    c("Dictyostelium discoideum cf", "Homo sapiens")
+    c("Dictyostelium cf discoideum", "Homo sapiens")
   )
 })
 
 test_that("RADTE allS mode maps mixed legacy and taxonomic species labels", {
   sp_file <- tempfile(fileext = ".nwk")
   writeLines(
-    "((Homo_sapiens:10,Dictyostelium_discoideum_cf:10)n1:10,Arabidopsis_thaliana_subsp_lyrata:20)root;",
+    "((Homo_sapiens:10,Dictyostelium_cf_discoideum:10)n1:10,Arabidopsis_thaliana_subsp_lyrata:20)root;",
     sp_file
   )
   on.exit(unlink(sp_file))
 
   gn_file <- tempfile(fileext = ".nwk")
   writeLines(
-    "((Homo_sapiens_gene1:0.1,Dictyostelium_discoideum_cf_gene123:0.1)n1:0.2,Arabidopsis_thaliana_subsp_lyrata_gene456:0.3)n2;",
+    "((Homo_sapiens_gene1:0.1,Dictyostelium_cf_discoideum_gene123:0.1)n1:0.2,Arabidopsis_thaliana_subsp_lyrata_gene456:0.3)n2;",
     gn_file
   )
   on.exit(unlink(gn_file), add = TRUE)
@@ -162,7 +168,7 @@ test_that("RADTE allS mode maps mixed legacy and taxonomic species labels", {
     result$output_tree$tip.label,
     c(
       "Homo_sapiens_gene1",
-      "Dictyostelium_discoideum_cf_gene123",
+      "Dictyostelium_cf_discoideum_gene123",
       "Arabidopsis_thaliana_subsp_lyrata_gene456"
     )
   )
