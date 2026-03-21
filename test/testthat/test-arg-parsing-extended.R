@@ -61,6 +61,18 @@ test_that("get_parsed_args preserves equals signs in argument values", {
   expect_equal(result$gene_tree, "/tmp/a=b.nwk")
 })
 
+test_that("get_parsed_args normalizes hyphenated option names", {
+  args <- c(
+    "--species-parser=qualified",
+    "--species-regex=^(.+)_gene[0-9]+$",
+    "--species-map-tsv=/tmp/species.tsv"
+  )
+  result <- get_parsed_args(args, print = FALSE)
+  expect_equal(result$species_parser, "qualified")
+  expect_equal(result$species_regex, "^(.+)_gene[0-9]+$")
+  expect_equal(result$species_map_tsv, "/tmp/species.tsv")
+})
+
 test_that("get_parsed_args errors for arguments without equals sign", {
   expect_error(
     get_parsed_args(c("--species_tree"), print = FALSE),

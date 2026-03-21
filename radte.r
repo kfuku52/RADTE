@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-radte_version = '0.3.0'
+radte_version = '0.3.1'
 
 #devtools::install_github(repo="cran/ape", ref="master")
 
@@ -27,7 +27,7 @@ get_parsed_args = function(args, print=TRUE) {
         if (length(split[[i]]) < 2) {
             stop('Argument is not in --key=value format: ', args[[i]])
         }
-        param = split[[i]][1]
+        param = gsub("-", "_", split[[i]][1], fixed=TRUE)
         if (nchar(param)==0) {
             stop('Argument key is empty in --key=value format: ', args[[i]])
         }
@@ -330,31 +330,459 @@ contains_polytomy = function(phy) {
     return(any(child_counts != 2))
 }
 
-# copied from rkftools https://github.com/kfuku52/rkftools
-get_species_names = function(phy, sep='_') {
-    split_names = strsplit(phy[['tip.label']], sep)
-    species_names = c()
-    for (sn in split_names) {
-        species_names = c(species_names, paste0(sn[1], sep, sn[2]))
+is_nonempty_scalar_string = function(value) {
+    if (is.null(value) || (length(value) != 1) || is.na(value)) {
+        return(FALSE)
+    }
+    return(nchar(trimws(as.character(value))) > 0)
+}
+
+get_species_parser_names = function() {
+    return(c('legacy', 'qualified', 'regex', 'map'))
+}
+
+detect_species_map_has_header = function(file) {
+    lines = readLines(file, warn=FALSE)
+    lines = lines[nchar(trimws(lines)) > 0]
+    if (length(lines) == 0) {
+        stop('Species map TSV is empty.')
+    }
+    first_fields = strsplit(lines[[1]], '\t', fixed=TRUE)[[1]]
+    first_fields_norm = tolower(gsub('[^a-z0-9]+', '', first_fields))
+    label_candidates = c('label', 'tip', 'tiplabel', 'genetip', 'genelabel', 'input', 'query', 'name', 'alias')
+    species_candidates = c('species', 'specieslabel', 'canonicalspecies', 'mappedspecies', 'canonical')
+    return(
+        any(first_fields_norm %in% label_candidates) &&
+        any(first_fields_norm %in% species_candidates)
+    )
+}
+
+find_species_map_column = function(colnames_norm, candidates) {
+    matched = which(colnames_norm %in% candidates)
+    if (length(matched) == 0) {
+        return(NA_integer_)
+    }
+    return(matched[[1]])
+}
+
+read_species_map_tsv = function(file) {
+    if (!is_nonempty_scalar_string(file)) {
+        stop('--species-map-tsv should be a non-empty path.')
+    }
+    file = as.character(file)
+    if (!file.exists(file)) {
+        stop('Species map TSV was not found: ', file)
+    }
+
+    has_header = detect_species_map_has_header(file)
+    map_df = read.delim(
+        file=file,
+        sep='\t',
+        header=has_header,
+        stringsAsFactors=FALSE,
+        check.names=FALSE,
+        quote='',
+        comment.char=''
+    )
+    if (ncol(map_df) < 2) {
+        stop('Species map TSV should contain at least two tab-delimited columns.')
+    }
+
+    if (!has_header) {
+        colnames(map_df)[1:2] = c('label', 'species')
+        if (ncol(map_df) >= 3) {
+            colnames(map_df)[[3]] = 'taxonomy_query'
+        }
+    } else {
+        colnames_norm = tolower(gsub('[^a-z0-9]+', '', colnames(map_df)))
+        label_idx = find_species_map_column(
+            colnames_norm,
+            c('label', 'tip', 'tiplabel', 'genetip', 'genelabel', 'input', 'query', 'name', 'alias')
+        )
+        species_idx = find_species_map_column(
+            colnames_norm,
+            c('species', 'specieslabel', 'canonicalspecies', 'mappedspecies', 'canonical')
+        )
+        taxonomy_idx = find_species_map_column(
+            colnames_norm,
+            c('taxonomyquery', 'scientificname', 'scientific', 'taxonomy', 'taxquery')
+        )
+        if (is.na(label_idx) || is.na(species_idx)) {
+            stop(
+                'Species map TSV should contain label/species columns. ',
+                'Accepted names include: label, gene_tip, species, species_label.'
+            )
+        }
+        selected = data.frame(
+            label=map_df[[label_idx]],
+            species=map_df[[species_idx]],
+            stringsAsFactors=FALSE
+        )
+        if (!is.na(taxonomy_idx)) {
+            selected[['taxonomy_query']] = map_df[[taxonomy_idx]]
+        }
+        map_df = selected
+    }
+
+    map_df[['label']] = trimws(as.character(map_df[['label']]))
+    map_df[['species']] = trimws(as.character(map_df[['species']]))
+    if ('taxonomy_query' %in% colnames(map_df)) {
+        map_df[['taxonomy_query']] = trimws(as.character(map_df[['taxonomy_query']]))
+    }
+    is_invalid = (
+        is.na(map_df[['label']]) | (map_df[['label']] == '') |
+        is.na(map_df[['species']]) | (map_df[['species']] == '')
+    )
+    if (any(is_invalid)) {
+        stop('Species map TSV contains empty label/species value(s).')
+    }
+    if (any(duplicated(map_df[['label']]))) {
+        duplicated_labels = unique(map_df[['label']][duplicated(map_df[['label']])])
+        stop('Species map TSV contains duplicated label(s): ', paste(duplicated_labels, collapse=', '))
+    }
+    return(map_df)
+}
+
+build_species_parser = function(parser_name='legacy', species_regex=NULL, species_map_tsv=NULL, sep='_') {
+    if (!is_nonempty_scalar_string(parser_name)) {
+        stop('--species-parser should be a non-empty string.')
+    }
+    parser_name = tolower(trimws(as.character(parser_name)))
+    if (parser_name == 'qualified_gg') {
+        parser_name = 'qualified'
+    }
+    supported = get_species_parser_names()
+    if (!parser_name %in% supported) {
+        stop('--species-parser should be one of: ', paste(supported, collapse=', '))
+    }
+
+    has_species_regex = is_nonempty_scalar_string(species_regex)
+    has_species_map = is_nonempty_scalar_string(species_map_tsv)
+    if ((parser_name == 'regex') && (!has_species_regex)) {
+        stop('--species-regex is required when --species-parser=regex.')
+    }
+    if ((parser_name != 'regex') && has_species_regex) {
+        stop('--species-regex can only be used with --species-parser=regex.')
+    }
+    if ((parser_name == 'map') && (!has_species_map)) {
+        stop('--species-map-tsv is required when --species-parser=map.')
+    }
+    if ((parser_name != 'map') && has_species_map) {
+        stop('--species-map-tsv can only be used with --species-parser=map.')
+    }
+
+    species_map = NULL
+    if (parser_name == 'map') {
+        species_map = read_species_map_tsv(species_map_tsv)
+    }
+    if (parser_name != 'regex') {
+        species_regex = NULL
+    }
+    return(
+        list(
+            name=parser_name,
+            sep=sep,
+            species_regex=species_regex,
+            species_map=species_map
+        )
+    )
+}
+
+get_invalid_tip_label_message = function(species_parser, invalid_labels) {
+    max_show = min(5, length(invalid_labels))
+    shown_labels = paste(invalid_labels[seq_len(max_show)], collapse=', ')
+    extra_suffix = ''
+    if (length(invalid_labels) > max_show) {
+        extra_suffix = paste0(' ... (', length(invalid_labels) - max_show, ' more)')
+    }
+    parser_name = species_parser[['name']]
+    if (parser_name == 'legacy') {
+        return(
+            paste0(
+                'Input gene tree tip label(s) must follow GENUS_SPECIES_GENEID format. Invalid label(s): ',
+                shown_labels,
+                extra_suffix
+            )
+        )
+    }
+    if (parser_name == 'regex') {
+        return(
+            paste0(
+                'Input gene tree tip label(s) are invalid for --species-parser=regex. ',
+                'They must match --species-regex and produce a non-empty species label. Invalid label(s): ',
+                shown_labels,
+                extra_suffix
+            )
+        )
+    }
+    if (parser_name == 'map') {
+        return(
+            paste0(
+                'Input gene tree tip label(s) are invalid for --species-parser=map. ',
+                'They must be present in --species-map-tsv. Invalid label(s): ',
+                shown_labels,
+                extra_suffix
+            )
+        )
+    }
+    return(
+        paste0(
+            'Input gene tree tip label(s) are invalid for --species-parser=',
+            parser_name,
+            '. Invalid label(s): ',
+            shown_labels,
+            extra_suffix
+        )
+    )
+}
+
+infer_qualified_species_token_count = function(tokens) {
+    if (length(tokens) < 2) {
+        return(0)
+    }
+    token2 = tolower(tokens[[2]])
+    token3 = ''
+    if (length(tokens) >= 3) {
+        token3 = tolower(tokens[[3]])
+    }
+    if ((length(tokens) >= 5) && (token3 %in% c('subsp', 'ssp', 'var', 'forma', 'f', 'subspecies', 'strain'))) {
+        return(4)
+    }
+    if ((length(tokens) >= 4) && ((token2 %in% c('sp', 'cf', 'aff', 'nr')) || (token3 %in% c('cf', 'aff', 'sp', 'nr', 'group', 'complex', 'clade', 'lineage')))) {
+        return(3)
+    }
+    return(2)
+}
+
+match_species_prefix_from_tree = function(tip_label, species_tree_labels) {
+    if (length(species_tree_labels) == 0) {
+        return(character(0))
+    }
+    matches = species_tree_labels[
+        (tip_label == species_tree_labels) |
+        startsWith(tip_label, paste0(species_tree_labels, '_'))
+    ]
+    if (length(matches) == 0) {
+        return(character(0))
+    }
+    match_lengths = nchar(matches)
+    longest_matches = unique(matches[match_lengths == max(match_lengths)])
+    return(longest_matches)
+}
+
+species_parser_get_gene_species = function(species_parser, tip_labels, species_tree_labels=NULL, strict=TRUE) {
+    if (is.null(species_parser)) {
+        species_parser = build_species_parser('legacy')
+    }
+    tip_labels = as.character(tip_labels)
+    if (length(tip_labels) == 0) {
+        return(character(0))
+    }
+
+    parser_name = species_parser[['name']]
+    if (parser_name == 'legacy') {
+        split_labels = strsplit(tip_labels, species_parser[['sep']], fixed=TRUE)
+        species_names = vapply(split_labels, function(items) {
+            if (length(items) < 3) {
+                return(NA_character_)
+            }
+            genus = items[[1]]
+            species = items[[2]]
+            gene_id = paste(items[3:length(items)], collapse=species_parser[['sep']])
+            if ((nchar(genus) == 0) || (nchar(species) == 0) || (nchar(gene_id) == 0)) {
+                return(NA_character_)
+            }
+            return(paste0(genus, species_parser[['sep']], species))
+        }, character(1))
+    } else if (parser_name == 'qualified') {
+        split_labels = strsplit(tip_labels, '_', fixed=TRUE)
+        species_names = vapply(seq_along(split_labels), function(i) {
+            items = split_labels[[i]]
+            if (length(items) < 3) {
+                return(NA_character_)
+            }
+            if (any(items == '')) {
+                return(NA_character_)
+            }
+            if (length(species_tree_labels) > 0) {
+                matched_species = match_species_prefix_from_tree(tip_labels[[i]], species_tree_labels)
+                matched_species = matched_species[nchar(matched_species) < nchar(tip_labels[[i]])]
+                if (length(matched_species) == 1) {
+                    return(matched_species[[1]])
+                }
+                if (length(matched_species) > 1) {
+                    return(NA_character_)
+                }
+            }
+            species_token_count = infer_qualified_species_token_count(items)
+            if ((species_token_count < 2) || (length(items) <= species_token_count)) {
+                return(NA_character_)
+            }
+            gene_id = paste(items[(species_token_count + 1):length(items)], collapse='_')
+            if (nchar(gene_id) == 0) {
+                return(NA_character_)
+            }
+            return(paste(items[seq_len(species_token_count)], collapse='_'))
+        }, character(1))
+    } else if (parser_name == 'regex') {
+        regex_match = regexec(species_parser[['species_regex']], tip_labels, perl=TRUE)
+        regex_items = regmatches(tip_labels, regex_match)
+        species_names = vapply(regex_items, function(items) {
+            if (length(items) == 0) {
+                return(NA_character_)
+            }
+            species_label = items[[1]]
+            if (length(items) >= 2) {
+                species_label = items[[2]]
+            }
+            if (is.na(species_label) || (nchar(species_label) == 0)) {
+                return(NA_character_)
+            }
+            return(species_label)
+        }, character(1))
+    } else if (parser_name == 'map') {
+        species_map = species_parser[['species_map']]
+        map_idx = match(tip_labels, species_map[['label']])
+        species_names = species_map[['species']][map_idx]
+        species_names[is.na(map_idx)] = NA_character_
+    } else {
+        stop('Unsupported species parser: ', parser_name)
+    }
+
+    if (strict && any(is.na(species_names))) {
+        invalid_labels = tip_labels[is.na(species_names)]
+        stop(get_invalid_tip_label_message(species_parser, invalid_labels))
     }
     return(species_names)
 }
 
-# copied from rkftools https://github.com/kfuku52/rkftools
-leaf2species = function(leaf_names) {
-    split = strsplit(leaf_names, '_')
-    species_names = c()
-    for (i in seq_along(split)) {
-        if (length(split[[i]])>=3) {
-            species_names = c(
-                species_names,
-                paste(split[[i]][[1]], split[[i]][[2]])
+species_parser_get_species_tip_labels = function(species_parser, tip_labels, strict=TRUE) {
+    if (is.null(species_parser)) {
+        species_parser = build_species_parser('legacy')
+    }
+    tip_labels = as.character(tip_labels)
+    if (length(tip_labels) == 0) {
+        return(character(0))
+    }
+
+    parser_name = species_parser[['name']]
+    if (parser_name == 'map') {
+        species_map = species_parser[['species_map']]
+        map_idx = match(tip_labels, species_map[['label']])
+        species_names = tip_labels
+        is_mapped = !is.na(map_idx)
+        species_names[is_mapped] = species_map[['species']][map_idx[is_mapped]]
+        known_species = unique(species_map[['species']])
+        is_valid = is_mapped | (tip_labels %in% known_species)
+        if (strict && any(!is_valid)) {
+            invalid_labels = tip_labels[!is_valid]
+            stop(
+                'Input species tree tip label(s) are invalid for --species-parser=map. ',
+                'They must be present in --species-map-tsv or match mapped species labels. Invalid label(s): ',
+                format_limited_values(invalid_labels, max_items=5)
             )
-        } else {
-            warning('leaf name could not be interpreted as genus_species_gene: ', split[[i]], '\n')
+        }
+        species_names[!is_valid] = NA_character_
+        return(species_names)
+    }
+    return(tip_labels)
+}
+
+validate_species_tip_parser_labels = function(sp_tree, species_parser) {
+    parsed_tip_labels = species_parser_get_species_tip_labels(species_parser, sp_tree[['tip.label']], strict=TRUE)
+    if (any(duplicated(parsed_tip_labels))) {
+        duplicated_labels = unique(parsed_tip_labels[duplicated(parsed_tip_labels)])
+        stop(
+            'Input species tree contains duplicated species label(s) after applying the species parser: ',
+            paste(duplicated_labels, collapse=', ')
+        )
+    }
+    return(parsed_tip_labels)
+}
+
+species_parser_taxonomy_query = function(species_parser, species_labels) {
+    if (is.null(species_parser)) {
+        species_parser = build_species_parser('legacy')
+    }
+    species_labels = as.character(species_labels)
+    if (length(species_labels) == 0) {
+        return(character(0))
+    }
+
+    taxonomy_names = gsub('_', ' ', species_labels, fixed=TRUE)
+    if (species_parser[['name']] == 'map') {
+        species_map = species_parser[['species_map']]
+        if ('taxonomy_query' %in% colnames(species_map)) {
+            lookup_idx = match(species_labels, species_map[['species']])
+            has_lookup = !is.na(lookup_idx)
+            mapped_taxonomy = species_map[['taxonomy_query']][lookup_idx[has_lookup]]
+            valid_taxonomy = !is.na(mapped_taxonomy) & (mapped_taxonomy != '')
+            if (any(valid_taxonomy)) {
+                matched_positions = which(has_lookup)
+                taxonomy_names[matched_positions[valid_taxonomy]] = mapped_taxonomy[valid_taxonomy]
+            }
         }
     }
-    return(species_names)
+    return(taxonomy_names)
+}
+
+resolve_species_tree_tips = function(species_parser, species_labels, species_tree_labels) {
+    species_tree_labels = as.character(species_tree_labels)
+    parsed_species_tree = species_parser_get_species_tip_labels(species_parser, species_tree_labels, strict=TRUE)
+    if (any(duplicated(parsed_species_tree))) {
+        duplicated_labels = unique(parsed_species_tree[duplicated(parsed_species_tree)])
+        stop(
+            'Species tree tip mapping is ambiguous after applying the species parser: ',
+            paste(duplicated_labels, collapse=', ')
+        )
+    }
+    resolved = vapply(species_labels, function(species_label) {
+        matched_tip = species_tree_labels[parsed_species_tree == species_label]
+        if (length(matched_tip) != 1) {
+            return(NA_character_)
+        }
+        return(matched_tip[[1]])
+    }, character(1))
+    return(resolved)
+}
+
+# copied from rkftools https://github.com/kfuku52/rkftools
+get_species_names = function(phy, sep='_', species_parser=NULL, species_tree_labels=NULL) {
+    if (is.null(species_parser)) {
+        species_parser = build_species_parser('legacy', sep=sep)
+    }
+    return(
+        species_parser_get_gene_species(
+            species_parser=species_parser,
+            tip_labels=phy[['tip.label']],
+            species_tree_labels=species_tree_labels,
+            strict=TRUE
+        )
+    )
+}
+
+# copied from rkftools https://github.com/kfuku52/rkftools
+leaf2species = function(leaf_names, species_parser=NULL, species_tree_labels=NULL) {
+    if (is.null(species_parser)) {
+        species_parser = build_species_parser('legacy')
+    }
+    if (length(leaf_names) == 0) {
+        return(character(0))
+    }
+    species_names = species_parser_get_gene_species(
+        species_parser=species_parser,
+        tip_labels=leaf_names,
+        species_tree_labels=species_tree_labels,
+        strict=FALSE
+    )
+    invalid_labels = leaf_names[is.na(species_names)]
+    if (length(invalid_labels) > 0) {
+        for (invalid_label in invalid_labels) {
+            warning('leaf name could not be interpreted by species parser: ', invalid_label, '\n')
+        }
+    }
+    species_names = species_names[!is.na(species_names)]
+    return(species_parser_taxonomy_query(species_parser, species_names))
 }
 
 validate_species_tree_labels = function(sp_tree) {
@@ -387,36 +815,42 @@ validate_species_tree_labels = function(sp_tree) {
     return(sp_tree)
 }
 
-validate_gene_tip_labels = function(tip_labels) {
-    split_labels = strsplit(tip_labels, '_')
-    is_invalid = sapply(split_labels, function(items) {
-        if (length(items) < 3) {
-            return(TRUE)
-        }
-        genus = items[[1]]
-        species = items[[2]]
-        gene_id = paste(items[3:length(items)], collapse='_')
-        (nchar(genus)==0) || (nchar(species)==0) || (nchar(gene_id)==0)
-    })
-    if (any(is_invalid)) {
-        invalid_labels = tip_labels[is_invalid]
-        max_show = min(5, length(invalid_labels))
-        shown_labels = paste(invalid_labels[1:max_show], collapse=', ')
-        extra_suffix = ''
-        if (length(invalid_labels) > max_show) {
-            extra_suffix = paste0(' ... (', length(invalid_labels)-max_show, ' more)')
-        }
-        stop(
-            'Input gene tree tip label(s) must follow GENUS_SPECIES_GENEID format. Invalid label(s): ',
-            shown_labels,
-            extra_suffix
-        )
+validate_gene_tip_labels = function(tip_labels, species_parser=NULL, species_tree_labels=NULL) {
+    if (is.null(species_parser)) {
+        species_parser = build_species_parser('legacy')
     }
+    invisible(
+        species_parser_get_gene_species(
+            species_parser=species_parser,
+            tip_labels=tip_labels,
+            species_tree_labels=species_tree_labels,
+            strict=TRUE
+        )
+    )
 }
 
-validate_gene_species_coverage = function(gn_tree, sp_tree) {
-    gn_species = unique(get_species_names(gn_tree))
-    missing_species = setdiff(gn_species, sp_tree[['tip.label']])
+validate_gene_species_coverage = function(gn_tree, sp_tree, species_parser=NULL, species_tree_labels=NULL) {
+    if (is.null(species_parser)) {
+        species_parser = build_species_parser('legacy')
+    }
+    if (is.null(species_tree_labels)) {
+        species_tree_labels = sp_tree[['tip.label']]
+    }
+    gn_species = unique(
+        get_species_names(
+            phy=gn_tree,
+            species_parser=species_parser,
+            species_tree_labels=species_tree_labels
+        )
+    )
+    sp_species = unique(
+        species_parser_get_species_tip_labels(
+            species_parser=species_parser,
+            tip_labels=species_tree_labels,
+            strict=TRUE
+        )
+    )
+    missing_species = setdiff(gn_species, sp_species)
     if (length(missing_species) > 0) {
         stop(
             'Species in the gene tree were not found in the species tree: ',
@@ -1727,6 +2161,25 @@ chronos_timeout_label = if (is.finite(chronos_attempt_timeout_sec)) chronos_atte
 chronos_budget_label = if (is.finite(chronos_total_timeout_sec)) chronos_total_timeout_sec else 'inf'
 cat('chronos timeout settings: attempt_sec=', chronos_timeout_label, ', total_sec=', chronos_budget_label, '\n', sep='')
 
+species_parser_name = 'legacy'
+if ('species_parser' %in% names(args)) {
+    species_parser_name = args[['species_parser']]
+}
+species_regex = NULL
+if ('species_regex' %in% names(args)) {
+    species_regex = args[['species_regex']]
+}
+species_map_tsv = NULL
+if ('species_map_tsv' %in% names(args)) {
+    species_map_tsv = args[['species_map_tsv']]
+}
+species_parser = build_species_parser(
+    parser_name=species_parser_name,
+    species_regex=species_regex,
+    species_map_tsv=species_map_tsv
+)
+cat('species parser:', species_parser[['name']], '\n')
+
 cat('\nStart: species tree processing', '\n')
 tree_text0 = scan(sp_file, what=character(), sep="\n", blank.lines.skip=FALSE)
 tree_text1 = gsub("'([0-9]+)'", "PLACEHOLDER\\1", tree_text0)
@@ -1735,6 +2188,7 @@ if (!is.null(sp_tree[['node.label']])) {
     sp_tree[['node.label']] = sub('^PLACEHOLDER', '', sp_tree[['node.label']])
 }
 sp_tree = validate_species_tree_labels(sp_tree)
+sp_tip_species = validate_species_tip_parser_labels(sp_tree, species_parser)
 if (contains_polytomy(sp_tree)) {
     stop('Input species tree contains polytomy. A completely bifurcated tree is expected as input.')
 }
@@ -1749,7 +2203,8 @@ sp_node_names = c(sp_tree[['tip.label']], sp_tree[['node.label']])
 sp_node_table = data.frame(node=sp_node_names, age=sp_node_ages, spp=NA, stringsAsFactors=FALSE)
 for (sp_sub in ape::subtrees(sp_tree)) {
     subroot_node = sp_sub[['node.label']][1]
-    sp_node_table[(sp_node_table$node==subroot_node),'spp'] = paste(sp_sub[['tip.label']], collapse=',')
+    sub_species = species_parser_get_species_tip_labels(species_parser, sp_sub[['tip.label']], strict=TRUE)
+    sp_node_table[(sp_node_table$node==subroot_node),'spp'] = paste(sub_species, collapse=',')
 }
 max_tip_age = max(sp_node_table[is.na(sp_node_table[['spp']]),'age'])
 if (max_tip_age!=0) {
@@ -1793,8 +2248,8 @@ if (mode=='generax') {
         stop('Input tree contains polytomy. A completely bifurcated tree is expected as input.')
     }
     gn_tree = validate_gene_tree_labels(gn_tree)
-    validate_gene_tip_labels(gn_tree[['tip.label']])
-    validate_gene_species_coverage(gn_tree, sp_tree)
+    validate_gene_tip_labels(gn_tree[['tip.label']], species_parser=species_parser, species_tree_labels=sp_tree[['tip.label']])
+    validate_gene_species_coverage(gn_tree, sp_tree, species_parser=species_parser, species_tree_labels=sp_tree[['tip.label']])
     gn_tree = pad_branch_length(gn_tree, pad_size=args[['pad_short_edge']])
     #gn_tree = adjust_branch_length_order(gn_tree, min_bl=args[['pad_short_edge']])
     cat('Minimum branch length in gene tree:', min(gn_tree[['edge.length']]), '\n')    
@@ -1873,8 +2328,8 @@ if (mode=='generax') {
         stop('Input tree contains polytomy. A completely bifurcated tree is expected as input.')
     }
     gn_tree = validate_gene_tree_labels(gn_tree)
-    validate_gene_tip_labels(gn_tree[['tip.label']])
-    validate_gene_species_coverage(gn_tree, sp_tree)
+    validate_gene_tip_labels(gn_tree[['tip.label']], species_parser=species_parser, species_tree_labels=sp_tree[['tip.label']])
+    validate_gene_species_coverage(gn_tree, sp_tree, species_parser=species_parser, species_tree_labels=sp_tree[['tip.label']])
     gn_tree = pad_branch_length(gn_tree, pad_size=args[['pad_short_edge']])
 
     gn_node_table = read_notung_parsable(file=parsable_file, mode='D')
@@ -1901,8 +2356,13 @@ if (mode=='generax') {
         root_node = gn_sub$node.label[1]
         if (! root_node %in% gn_node_table$gn_node) {
             root_num = get_node_num_by_name(gn_tree, root_node)
-            node_spp = unique(leaf2species(gn_sub[['tip.label']]))
-            node_spp = sub(' ', '_', node_spp)
+            node_spp = unique(
+                get_species_names(
+                    phy=gn_sub,
+                    species_parser=species_parser,
+                    species_tree_labels=sp_tree[['tip.label']]
+                )
+            )
             sp_node_sets = strsplit(sp_node_table$spp, ',', fixed=TRUE)
             is_spnode_species = sapply(sp_node_sets, function(spp_set) {
                 all(node_spp %in% spp_set)
@@ -1941,19 +2401,37 @@ validate_duplication_nodes_internal(gn_node_table, gn_tree)
 
 # Calibration node check
 if ((sum(gn_node_table[['event']]=="D") > 0)&(any(is.na(gn_node_table[['upper_age']])))) {
-    gn_spp = unique(get_species_names(gn_tree))
+    gn_spp = unique(
+        get_species_names(
+            phy=gn_tree,
+            species_parser=species_parser,
+            species_tree_labels=sp_tree[['tip.label']]
+        )
+    )
+    gn_sp_tips = resolve_species_tree_tips(species_parser, gn_spp, sp_tree[['tip.label']])
+    if (any(is.na(gn_sp_tips))) {
+        stop(
+            'Species tree tip mapping failed for gene-tree species: ',
+            paste(gn_spp[is.na(gn_sp_tips)], collapse=', ')
+        )
+    }
     num_sp = length(gn_spp)
     cat('# species in the gene tree:', num_sp, '\n')
     cat('Species in the gene tree:', paste(gn_spp, collapse=', '), '\n')
-    num_sp_gntree = max(1, ape::getMRCA(sp_tree, gn_spp))
+    if (length(gn_sp_tips) == 1) {
+        num_sp_gntree = get_node_num_by_name(sp_tree, gn_sp_tips)
+    } else {
+        num_sp_gntree = ape::getMRCA(sp_tree, gn_sp_tips)
+    }
+    num_sp_gntree = max(1, num_sp_gntree)
     if (num_sp_gntree==get_root_num(sp_tree)) {
         divtime_max = max_age
         divtime_min = max(ape::node.depth.edgelength(sp_tree))
     } else {
         if (length(gn_spp)==1) {
-            num_mrca = get_node_num_by_name(sp_tree, gn_spp)
+            num_mrca = get_node_num_by_name(sp_tree, gn_sp_tips)
         } else {
-            num_mrca = ape::getMRCA(sp_tree, gn_spp)
+            num_mrca = ape::getMRCA(sp_tree, gn_sp_tips)
         }
         num_parent = sp_tree$edge[,1][sp_tree$edge[,2]==num_mrca]
         label_mrca = get_node_name_by_num(phy=sp_tree, node_num=num_mrca)
@@ -2123,16 +2601,40 @@ if (!has_duplication_event) {
     cat("Constrained nodes:", calibrated_node, '\n')
     cat("All nodes are speciation nodes. Transferring node ages from species tree without age inference by chronos.", '\n')
     dup_constraint = NA
-    gn_spp = unique(get_species_names(gn_tree))
-    drop_spp = sp_tree$tip.label[! sp_tree$tip.label %in% gn_spp]
+    gn_spp = unique(
+        get_species_names(
+            phy=gn_tree,
+            species_parser=species_parser,
+            species_tree_labels=sp_tree[['tip.label']]
+        )
+    )
+    gn_sp_tips = resolve_species_tree_tips(species_parser, gn_spp, sp_tree[['tip.label']])
+    if (any(is.na(gn_sp_tips))) {
+        stop(
+            'Species tree tip mapping failed for gene-tree species: ',
+            paste(gn_spp[is.na(gn_sp_tips)], collapse=', ')
+        )
+    }
+    drop_spp = sp_tree$tip.label[! sp_tree$tip.label %in% gn_sp_tips]
     if (length(drop_spp) > 0) {
         chronos_out = drop.tip(phy=sp_tree, tip=drop_spp, trim.internal = TRUE)
     } else {
         chronos_out = sp_tree
     }
+    gn_tip_species = species_parser_get_gene_species(
+        species_parser=species_parser,
+        tip_labels=gn_tree$tip.label,
+        species_tree_labels=sp_tree[['tip.label']],
+        strict=TRUE
+    )
+    chronos_tip_species = species_parser_get_species_tip_labels(
+        species_parser=species_parser,
+        tip_labels=chronos_out$tip.label,
+        strict=TRUE
+    )
     gn_tip_index = c()
-    for (sp in chronos_out$tip.label) {
-        tip_matches = which(startsWith(gn_tree$tip.label, paste0(sp, '_')) | (gn_tree$tip.label==sp))
+    for (sp in chronos_tip_species) {
+        tip_matches = which(gn_tip_species == sp)
         if (length(tip_matches) != 1) {
             stop(
                 'Gene tree tip mapping failed for species ',
