@@ -17,6 +17,7 @@ The divergence time of duplication nodes are estimated while constraining specia
 * [R](https://www.r-project.org/): Started developing with 3.5 and most recently tested with 4.1.
 * [ape](http://ape-package.ird.fr/)
 * [treeio](https://github.com/YuLab-SMU/treeio): required for `--generax_nhx`
+* [PAML / MCMCTree](http://abacus.gene.ucl.ac.uk/software/paml.html): optional, required for `--dating_backend=mcmctree`
 
 In addition to the above dependencies, RADTE needs an output from a phylogeny reconciliation program. 
 **NOTUNG** and **GeneRax** are supported.
@@ -84,6 +85,26 @@ RADTE uses the first capture group if the regex contains captures; otherwise it 
 Required when `--species-parser=map`.
 This should be a tab-delimited file with `label` and `species` columns.
 An optional `taxonomy_query` column can be used to override scientific-name conversion.
+#### `--species_node_bounds_tsv`
+Optional tab-delimited file for species-tree node age constraints.
+This file should contain a `node` column plus either `age` or the pair `age_min` / `age_max`.
+The node names must match the labeled internal/root nodes in `--species_tree`.
+The point age implied by the species-tree branch lengths must fall within the supplied interval.
+RADTE transfers these bounds to gene-tree speciation nodes. If the same species-tree node corresponds to multiple gene-tree speciation nodes, `mcmctree` enforces a shared age parameter, while `chronos` only reuses the same interval bounds.
+Accepted examples:
+```
+node	age
+n1	10
+root	30
+```
+or
+```
+node	age_min	age_max
+n1	8	12
+root	28	32
+```
+Use `age` if you want an exact calibration for that species-tree node.
+Use `age_min` / `age_max` if you want a confidence interval to be propagated to the corresponding gene-tree speciation nodes.
 #### `--max_age`
 If duplication nodes are deeper than the root node of the species tree, this value will be used as an upper limit of the root node.
 #### `--chronos_lambda`
@@ -110,6 +131,32 @@ When `--allow_constraint_drop=false`, RADTE now defaults to `60` seconds to avoi
 Total timeout budget (seconds) across all `chronos` retries (RS + retry strategies + S/R if enabled).  
 Use a non-negative number, or `inf`/`none`/`off` to disable total budgeting.
 When `--allow_constraint_drop=false`, RADTE now defaults to `300` seconds.
+#### `--dating_backend`
+Dating engine. Supported values are `chronos` (default) and `mcmctree`.
+`chronos` uses the current `ape::chronos` workflow and supports `--allow_constraint_drop` plus the `--chronos_*` options.
+When speciation-node intervals are supplied through `--species_node_bounds_tsv`, `chronos` uses those `age.min` / `age.max` bounds but cannot force separate internal nodes to share one estimated age unless the bounds are exact.
+`mcmctree` runs the external **PAML** program **MCMCTree** on the reconciled gene tree using the transferred root/speciation calibrations.
+For repeated speciation events caused by ancestral duplications, RADTE uses **MCMCTree** mirror labels (`#1`, `#2`, ...) so that corresponding gene-tree speciation nodes can share the same age parameter.
+The current RADTE integration supports `usedata=1` only and requires a MCMCTree-compatible alignment file.
+**BEAST is not yet integrated.**
+#### `--mcmctree_seqfile`
+Required when `--dating_backend=mcmctree`.
+This should be an alignment file readable by **MCMCTree** whose taxon names exactly match the gene-tree tip labels.
+#### `--mcmctree_bin`
+Optional path to the `mcmctree` executable. Default is `mcmctree` in `PATH`.
+#### `--mcmctree_workdir`
+Optional staging directory for the **MCMCTree** run. RADTE writes the generated tree/control files there and captures `out.txt`, `mcmc.txt`, `FigTree.tre`, and the stdout/stderr logs.
+#### `--mcmctree_usedata`
+Passed to **MCMCTree** as `usedata`.
+The current RADTE integration supports only `1`.
+#### `--mcmctree_seqtype`
+Passed to **MCMCTree** as `seqtype`. Default is `0`.
+#### `--mcmctree_clock`
+Passed to **MCMCTree** as `clock`. Default is `2`.
+#### `--mcmctree_model`
+Passed to **MCMCTree** as `model`. Default is `0`.
+#### `--mcmctree_burnin`, `--mcmctree_sampfreq`, `--mcmctree_nsample`, `--mcmctree_ncatG`
+Passed to **MCMCTree** as `burnin`, `sampfreq`, `nsample`, and `ncatG`.
 
 ## Example 1: RADTE after NOTUNG
 For input data, see `data/example_notung_01`.
@@ -170,6 +217,66 @@ In Generax, `--rec-model UndatedDTL` may not be compatible with RADTE, so please
 #### radte_gene_tree_output.nwk
 ![](img/generax_radte_gene_tree_output.svg)
 
+## Example 3: transfer species-tree node age CI to gene-tree speciation nodes
+Prepare a species-node bounds file.
+```
+cat > species_node_bounds.tsv <<'EOF'
+node	age_min	age_max
+s2	8	12
+s1	28	32
+EOF
+```
+
+Run RADTE with the default `chronos` backend.
+```
+./radte.r \
+--species_tree=species_tree.nwk \
+--generax_nhx=gene_tree.nhx \
+--species_node_bounds_tsv=species_node_bounds.tsv \
+--max_age=1000 \
+--chronos_lambda=1 \
+--chronos_model=discrete \
+--pad_short_edge=0.001
+```
+
+This transfers the interval for `s2` and `s1` to the corresponding gene-tree speciation nodes.
+With `chronos`, repeated speciation nodes created by ancestral duplications receive the same interval bounds, but they are not forced to have exactly identical estimated ages unless the bounds are exact.
+
+Check the transferred constraints in:
+* `radte_species_tree.tsv`: branch-length point ages and the effective `age_min` / `age_max`
+* `radte_gene_tree.tsv`: transferred `lower_age` / `upper_age`, `constraint_sp_node`, and `shared_speciation_group`
+
+## Example 4: RADTE with the MCMCTree backend
+`MCMCTree` requires an alignment file whose taxon labels match the gene-tree tips.
+If you use PHYLIP sequential format, separate each taxon name from the sequence by at least two spaces because **MCMCTree** is strict about this.
+```
+./radte.r \
+--species_tree=species_tree.nwk \
+--gene_tree=gene_tree.nwk.reconciled \
+--notung_parsable=gene_tree.nwk.reconciled.parsable.txt \
+--max_age=1000 \
+--dating_backend=mcmctree \
+--mcmctree_seqfile=gene_alignment.phy \
+--mcmctree_clock=2 \
+--mcmctree_model=0 \
+--mcmctree_burnin=2000 \
+--mcmctree_sampfreq=10 \
+--mcmctree_nsample=20000
+```
+
+To combine `MCMCTree` with species-node CI:
+```
+./radte.r \
+--species_tree=species_tree.nwk \
+--generax_nhx=gene_tree.nhx \
+--species_node_bounds_tsv=species_node_bounds.tsv \
+--max_age=1000 \
+--dating_backend=mcmctree \
+--mcmctree_seqfile=gene_alignment.phy
+```
+
+When the same labeled species-tree node is mapped to multiple gene-tree speciation nodes, RADTE writes **MCMCTree** mirror labels (`#1`, `#2`, ...) so that those nodes share one age parameter.
+
 ## Output files
 See `data/example_notung_01` and `data/example_generax_01` for example files.
 
@@ -196,17 +303,23 @@ This table summarizes gene tree nodes.
 In the column `event`, `S` and `D` respectively denote `speciation node` or `duplication node` inferred by Notung or GeneRax.
 The root node is indicated as `S(R)` or `D(R)`.
 `lower_sp_node` and `upper_sp_node` together indicate which node/branch of the species tree the gene tree node is mapped.
+`constraint_sp_node` identifies speciation constraints that correspond to a single labeled species-tree node, and `shared_speciation_group` marks repeated speciation nodes that are linked to the same species-tree event.
 
 #### radte_species_tree.tsv
 This table summarizes species tree nodes. 
+When `--species_node_bounds_tsv` is used, the table also records the transferred `age_min` and `age_max` bounds alongside the branch-length point age.
 
 #### radte_calibrated_nodes.txt
 This file records what types of gene tree nodes are constrained in the divergence time estimation.
 RADTE first attempts to constrain all available calibration points transferred from the species tree (**R**, root node; **S**, speciation node) for the divergence time estimation by `chronos` from the **ape** package.
 If the estimation succeeded, the content of this file should be **RS**, because both **R** and **S** nodes were used.
+If you supply `--species_node_bounds_tsv`, RADTE may report **RS** even when the input gene tree has no duplication nodes, because `chronos` needs to run to satisfy interval constraints.
 If the first estimation failed, RADTE retries while preserving **RS** by stabilizing risky bounds, edge scaling, multi-seed restarts, and soft-bound/alternative-parameter retries.
 If all **RS** retries fail and `--allow_constraint_drop=true`, RADTE repeats the same exhaustive retry pipeline at **S**, then at **R** (order: **RS** -> **S** -> **R**).
 This differs from the method described in Fukushima and Pollock (2020), where duplication nodes (**D**) may be constrained with the upper and lower limits.
+
+#### radte_mcmctree_*
+When `--dating_backend=mcmctree` is used, RADTE also copies the generated **MCMCTree** artifacts into the output directory with the prefix `radte_mcmctree_` (for example `radte_mcmctree_out.txt`, `radte_mcmctree_mcmc.txt`, `radte_mcmctree_FigTree.tre`, and the generated control/tree files).
 
 ## Testing
 RADTE includes a comprehensive test suite using `testthat`. To run the tests:

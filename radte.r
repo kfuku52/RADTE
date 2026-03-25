@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-radte_version = '0.3.1'
+radte_version = '0.3.2'
 
 #devtools::install_github(repo="cran/ape", ref="master")
 
@@ -89,6 +89,29 @@ parse_timeout_arg = function(value, arg_name) {
         return(Inf)
     }
     return(value_num)
+}
+
+parse_choice_arg = function(value, arg_name, supported_values) {
+    if ((!is.character(value)) || (length(value) != 1) || is.na(value) || (nchar(trimws(value)) == 0)) {
+        stop(arg_name, ' should be one of: ', paste(supported_values, collapse=', '))
+    }
+    value_norm = tolower(trimws(as.character(value)))
+    if (!value_norm %in% supported_values) {
+        stop(arg_name, ' should be one of: ', paste(supported_values, collapse=', '), '. Received: ', value)
+    }
+    return(value_norm)
+}
+
+parse_integer_arg = function(value, arg_name, min_value=NULL) {
+    value_num = suppressWarnings(as.numeric(value))
+    if (is.na(value_num) || (!is.finite(value_num)) || (value_num != round(value_num))) {
+        stop(arg_name, ' should be an integer.')
+    }
+    value_int = as.integer(round(value_num))
+    if (!is.null(min_value) && (value_int < min_value)) {
+        stop(arg_name, ' should be >= ', min_value, '.')
+    }
+    return(value_int)
 }
 
 format_limited_values = function(values, max_items=50) {
@@ -441,6 +464,128 @@ read_species_map_tsv = function(file) {
         stop('Species map TSV contains duplicated label(s): ', paste(duplicated_labels, collapse=', '))
     }
     return(map_df)
+}
+
+read_species_node_bounds_tsv = function(file) {
+    if (!is_nonempty_scalar_string(file)) {
+        stop('--species_node_bounds_tsv should be a non-empty path.')
+    }
+    file = as.character(file)
+    if (!file.exists(file)) {
+        stop('Species node bounds TSV was not found: ', file)
+    }
+
+    bounds_df = read.delim(
+        file=file,
+        sep='\t',
+        header=TRUE,
+        stringsAsFactors=FALSE,
+        check.names=FALSE,
+        quote='',
+        comment.char=''
+    )
+    if (ncol(bounds_df) < 2) {
+        stop('Species node bounds TSV should contain at least two tab-delimited columns with a header.')
+    }
+
+    colnames_norm = tolower(gsub('[^a-z0-9]+', '', colnames(bounds_df)))
+    node_idx = find_species_map_column(
+        colnames_norm,
+        c('node', 'nodelabel', 'speciesnode', 'speciesnodelabel', 'spnode')
+    )
+    age_idx = find_species_map_column(
+        colnames_norm,
+        c('age', 'exactage', 'pointage')
+    )
+    min_idx = find_species_map_column(
+        colnames_norm,
+        c('agemin', 'minage', 'lowerage', 'lowerbound', 'minimumage')
+    )
+    max_idx = find_species_map_column(
+        colnames_norm,
+        c('agemax', 'maxage', 'upperage', 'upperbound', 'maximumage')
+    )
+    if (is.na(node_idx)) {
+        stop(
+            'Species node bounds TSV should contain a node column. ',
+            'Accepted names include: node, node_label, species_node.'
+        )
+    }
+    has_exact_age = !is.na(age_idx)
+    has_interval_age = (!is.na(min_idx) || !is.na(max_idx))
+    if (has_exact_age && has_interval_age) {
+        stop('Species node bounds TSV should use either age or age_min/age_max columns, not both.')
+    }
+    if ((!has_exact_age) && (is.na(min_idx) || is.na(max_idx))) {
+        stop(
+            'Species node bounds TSV should contain either an age column or both age_min and age_max columns.'
+        )
+    }
+
+    selected = data.frame(
+        node=trimws(as.character(bounds_df[[node_idx]])),
+        stringsAsFactors=FALSE
+    )
+    if (has_exact_age) {
+        exact_age = suppressWarnings(as.numeric(bounds_df[[age_idx]]))
+        selected[['age_min']] = exact_age
+        selected[['age_max']] = exact_age
+    } else {
+        selected[['age_min']] = suppressWarnings(as.numeric(bounds_df[[min_idx]]))
+        selected[['age_max']] = suppressWarnings(as.numeric(bounds_df[[max_idx]]))
+    }
+
+    has_invalid_node = is.na(selected[['node']]) | (selected[['node']] == '')
+    has_invalid_age = (
+        is.na(selected[['age_min']]) | !is.finite(selected[['age_min']]) |
+        is.na(selected[['age_max']]) | !is.finite(selected[['age_max']])
+    )
+    if (any(has_invalid_node)) {
+        stop('Species node bounds TSV contains empty node value(s).')
+    }
+    if (any(has_invalid_age)) {
+        stop('Species node bounds TSV contains missing or non-finite age bound(s).')
+    }
+    if (any(selected[['age_min']] < 0) || any(selected[['age_max']] < 0)) {
+        stop('Species node bounds TSV contains negative age bound(s).')
+    }
+    if (any(selected[['age_max']] < selected[['age_min']])) {
+        stop('Species node bounds TSV contains age_max younger than age_min.')
+    }
+    if (any(duplicated(selected[['node']]))) {
+        duplicated_nodes = unique(selected[['node']][duplicated(selected[['node']])])
+        stop('Species node bounds TSV contains duplicated node(s): ', paste(duplicated_nodes, collapse=', '))
+    }
+    return(selected)
+}
+
+merge_species_node_bounds = function(sp_node_table, bounds_df) {
+    if (nrow(bounds_df) == 0) {
+        return(sp_node_table)
+    }
+    missing_nodes = setdiff(bounds_df[['node']], sp_node_table[['node']])
+    if (length(missing_nodes) > 0) {
+        stop(
+            'Species node bounds TSV contains node(s) not found in the species tree: ',
+            paste(missing_nodes, collapse=', ')
+        )
+    }
+    row_idx = match(bounds_df[['node']], sp_node_table[['node']])
+    sp_node_table[row_idx, 'age_min'] = bounds_df[['age_min']]
+    sp_node_table[row_idx, 'age_max'] = bounds_df[['age_max']]
+
+    point_age = suppressWarnings(as.numeric(sp_node_table[['age']]))
+    is_outside = (point_age < sp_node_table[['age_min']]) | (point_age > sp_node_table[['age_max']])
+    is_outside[is.na(is_outside)] = FALSE
+    if (any(is_outside)) {
+        invalid_nodes = sp_node_table[is_outside, 'node']
+        stop(
+            'Species node bounds TSV is inconsistent with the species-tree branch-length ages for node(s): ',
+            paste(invalid_nodes, collapse=', '),
+            '. The point age from the tree must fall within [age_min, age_max].'
+        )
+    }
+    return(sp_node_table)
 }
 
 build_species_parser = function(parser_name='legacy', species_regex=NULL, species_map_tsv=NULL, sep='_') {
@@ -961,6 +1106,61 @@ validate_gn_species_nodes = function(gn_node_table, sp_tree) {
             paste(missing_upper, collapse=', ')
         )
     }
+}
+
+annotate_species_constraint_groups = function(gn_node_table, gn_tree) {
+    if (nrow(gn_node_table) == 0) {
+        gn_node_table[['constraint_sp_node']] = character(0)
+        gn_node_table[['shared_speciation_group']] = character(0)
+        return(gn_node_table)
+    }
+
+    gn_node_table[['constraint_sp_node']] = NA_character_
+    is_exact_speciation = (
+        grepl('^S', gn_node_table[['event']]) &
+        !is.na(gn_node_table[['lower_sp_node']]) &
+        !is.na(gn_node_table[['upper_sp_node']]) &
+        (gn_node_table[['lower_sp_node']] == gn_node_table[['upper_sp_node']])
+    )
+    is_exact_speciation[is.na(is_exact_speciation)] = FALSE
+    gn_node_table[is_exact_speciation, 'constraint_sp_node'] = gn_node_table[is_exact_speciation, 'lower_sp_node']
+
+    gn_node_table[['shared_speciation_group']] = NA_character_
+    is_internal_exact_speciation = is_exact_speciation & (gn_node_table[['gn_node_num']] > ape::Ntip(gn_tree))
+    constraint_nodes = gn_node_table[is_internal_exact_speciation, 'constraint_sp_node']
+    if (length(constraint_nodes) > 0) {
+        group_sizes = table(constraint_nodes)
+        shared_nodes = names(group_sizes[group_sizes >= 2])
+        is_shared = is_internal_exact_speciation & (gn_node_table[['constraint_sp_node']] %in% shared_nodes)
+        is_shared[is.na(is_shared)] = FALSE
+        gn_node_table[is_shared, 'shared_speciation_group'] = gn_node_table[is_shared, 'constraint_sp_node']
+    }
+    return(gn_node_table)
+}
+
+calibration_table_has_interval_bounds = function(calibration_table) {
+    if (nrow(calibration_table) == 0) {
+        return(FALSE)
+    }
+    age_min = suppressWarnings(as.numeric(calibration_table[['age.min']]))
+    age_max = suppressWarnings(as.numeric(calibration_table[['age.max']]))
+    is_interval = (!is.na(age_min)) & (!is.na(age_max)) & (abs(age_max - age_min) > 1e-12)
+    return(any(is_interval))
+}
+
+gn_node_table_has_shared_interval_speciation = function(gn_node_table) {
+    required_cols = c('shared_speciation_group', 'lower_age', 'upper_age')
+    if ((nrow(gn_node_table) == 0) || any(!required_cols %in% colnames(gn_node_table))) {
+        return(FALSE)
+    }
+    is_shared = !is.na(gn_node_table[['shared_speciation_group']]) & (gn_node_table[['shared_speciation_group']] != '')
+    if (!any(is_shared)) {
+        return(FALSE)
+    }
+    age_min = suppressWarnings(as.numeric(gn_node_table[['lower_age']]))
+    age_max = suppressWarnings(as.numeric(gn_node_table[['upper_age']]))
+    is_interval = (!is.na(age_min)) & (!is.na(age_max)) & (abs(age_max - age_min) > 1e-12)
+    return(any(is_shared & is_interval))
 }
 
 validate_tree_edge_lengths = function(tree, tree_name) {
@@ -2075,6 +2275,424 @@ save_tree_pdf = function(phy, file, show.age=FALSE, edge_colors=list()) {
     invisible(dev.off())
 }
 
+format_mcmctree_number = function(value) {
+    value_num = suppressWarnings(as.numeric(value))
+    if (is.na(value_num) || (!is.finite(value_num))) {
+        stop('MCMCTree numeric value is invalid: ', value)
+    }
+    txt = formatC(value_num, digits=15, format='fg', flag='#')
+    txt = sub('\\.$', '', txt)
+    return(txt)
+}
+
+stage_external_input_file = function(source, staged_file) {
+    if (!is_nonempty_scalar_string(source)) {
+        stop('External input file path should be a non-empty string.')
+    }
+    source = as.character(source)
+    if (!file.exists(source)) {
+        stop('External input file was not found: ', source)
+    }
+    if (file.exists(staged_file) || file.exists(Sys.readlink(staged_file))) {
+        unlink(staged_file)
+    }
+    source_abs = normalizePath(source, mustWork=TRUE)
+    linked = suppressWarnings(file.symlink(source_abs, staged_file))
+    if (!isTRUE(linked)) {
+        copied = file.copy(source_abs, staged_file, overwrite=TRUE)
+        if (!isTRUE(copied)) {
+            stop('Failed to stage external input file: ', source)
+        }
+    }
+    return(invisible(staged_file))
+}
+
+make_mcmctree_calibration_text = function(age_min, age_max, exact_ratio=1e-6, exact_min=1e-8) {
+    age_min_num = suppressWarnings(as.numeric(age_min))
+    age_max_num = suppressWarnings(as.numeric(age_max))
+    has_min = !is.na(age_min_num) && is.finite(age_min_num)
+    has_max = !is.na(age_max_num) && is.finite(age_max_num)
+    if ((!has_min) && (!has_max)) {
+        return(NA_character_)
+    }
+    if (has_min && has_max) {
+        if (age_max_num < age_min_num) {
+            stop('MCMCTree calibration upper bound is younger than lower bound.')
+        }
+        if (isTRUE(all.equal(age_min_num, age_max_num))) {
+            eps = max(exact_min, abs(age_max_num) * exact_ratio)
+            age_min_num = max(0, age_min_num - eps)
+            age_max_num = age_max_num + eps
+        }
+        return(
+            paste0(
+                'B{',
+                format_mcmctree_number(age_min_num),
+                ', ',
+                format_mcmctree_number(age_max_num),
+                '}'
+            )
+        )
+    }
+    if (has_min) {
+        return(paste0('L(', format_mcmctree_number(age_min_num), ', 0.1, 1, 1e-300)'))
+    }
+    return(paste0('U(', format_mcmctree_number(age_max_num), ', 1e-300)'))
+}
+
+make_mcmctree_root_calibration_text = function(age_min, age_max, exact_ratio=1e-6, exact_min=1e-8) {
+    age_min_num = suppressWarnings(as.numeric(age_min))
+    age_max_num = suppressWarnings(as.numeric(age_max))
+    has_min = !is.na(age_min_num) && is.finite(age_min_num)
+    has_max = !is.na(age_max_num) && is.finite(age_max_num)
+    if ((!has_min) && (!has_max)) {
+        return(NA_character_)
+    }
+    if (has_min && has_max) {
+        if (age_max_num < age_min_num) {
+            stop('MCMCTree root calibration upper bound is younger than lower bound.')
+        }
+        if (isTRUE(all.equal(age_min_num, age_max_num))) {
+            eps = max(exact_min, abs(age_max_num) * exact_ratio)
+            age_min_num = max(0, age_min_num - eps)
+            age_max_num = age_max_num + eps
+        }
+        return(
+            paste0(
+                '>',
+                format_mcmctree_number(age_min_num),
+                '<',
+                format_mcmctree_number(age_max_num)
+            )
+        )
+    }
+    if (has_min) {
+        return(paste0('>', format_mcmctree_number(age_min_num)))
+    }
+    return(paste0('<', format_mcmctree_number(age_max_num)))
+}
+
+build_mcmctree_annotation_map = function(phy, gn_node_table, calibration_table, root_num) {
+    total_nodes = ape::Ntip(phy) + phy$Nnode
+    annotation_map = setNames(as.list(rep('', total_nodes)), as.character(seq_len(total_nodes)))
+    if (nrow(gn_node_table) == 0) {
+        return(list(annotation_map=annotation_map, duplication_flag=0L))
+    }
+
+    calibration_text_by_node = rep(NA_character_, total_nodes)
+    if (nrow(calibration_table) > 0) {
+        for (i in seq_len(nrow(calibration_table))) {
+            node_i = as.integer(calibration_table$node[i])
+            if (node_i == root_num) {
+                calibration_text_by_node[[node_i]] = make_mcmctree_root_calibration_text(
+                    age_min=calibration_table$age.min[i],
+                    age_max=calibration_table$age.max[i]
+                )
+            } else {
+                calibration_text_by_node[[node_i]] = make_mcmctree_calibration_text(
+                    age_min=calibration_table$age.min[i],
+                    age_max=calibration_table$age.max[i]
+                )
+            }
+        }
+    }
+
+    mirror_label_by_node = rep(NA_character_, total_nodes)
+    mirror_group = rep(NA_character_, nrow(gn_node_table))
+    if ('shared_speciation_group' %in% colnames(gn_node_table)) {
+        mirror_group = as.character(gn_node_table[['shared_speciation_group']])
+    } else if ('constraint_sp_node' %in% colnames(gn_node_table)) {
+        mirror_group = as.character(gn_node_table[['constraint_sp_node']])
+    } else if (all(c('lower_sp_node', 'upper_sp_node') %in% colnames(gn_node_table))) {
+        is_same_sp_node = (!is.na(gn_node_table[['lower_sp_node']])) &
+            (!is.na(gn_node_table[['upper_sp_node']])) &
+            (gn_node_table[['lower_sp_node']] == gn_node_table[['upper_sp_node']])
+        mirror_group[is_same_sp_node] = as.character(gn_node_table[['lower_sp_node']][is_same_sp_node])
+    }
+    spec_rows = gn_node_table[
+        (gn_node_table$gn_node_num > ape::Ntip(phy)) &
+        grepl('^S', gn_node_table$event) &
+        !is.na(mirror_group) &
+        (mirror_group != ''),
+        ,
+        drop=FALSE
+    ]
+    if (nrow(spec_rows) > 0) {
+        spec_rows[['mirror_group']] = mirror_group[match(spec_rows[['gn_node_num']], gn_node_table[['gn_node_num']])]
+    }
+    if (nrow(spec_rows) > 0) {
+        spec_groups = split(spec_rows, spec_rows$mirror_group)
+        label_counter = 1L
+        for (group_name in names(spec_groups)) {
+            group_df = spec_groups[[group_name]]
+            if (nrow(group_df) < 2) {
+                next
+            }
+            node_nums = sort(unique(as.integer(group_df$gn_node_num)))
+            group_rows = calibration_table[calibration_table$node %in% node_nums, , drop=FALSE]
+            has_complete_group = (nrow(group_rows) == length(node_nums))
+            is_same_bounds = FALSE
+            if (has_complete_group) {
+                rounded_min = round(as.numeric(group_rows$age.min), digits=10)
+                rounded_max = round(as.numeric(group_rows$age.max), digits=10)
+                is_same_bounds = (length(unique(rounded_min)) == 1) && (length(unique(rounded_max)) == 1)
+            }
+            if (!is_same_bounds) {
+                next
+            }
+            label_text = paste0('#', label_counter)
+            mirror_label_by_node[node_nums] = label_text
+            keep_node = min(node_nums)
+            drop_nodes = setdiff(node_nums, keep_node)
+            if (length(drop_nodes) > 0) {
+                calibration_text_by_node[drop_nodes] = NA_character_
+            }
+            label_counter = label_counter + 1L
+        }
+    }
+
+    internal_nodes = (ape::Ntip(phy) + 1):total_nodes
+    for (node_i in internal_nodes) {
+        label_i = mirror_label_by_node[[node_i]]
+        cal_i = calibration_text_by_node[[node_i]]
+        if (node_i == root_num) {
+            pieces = c(label_i, cal_i)
+            pieces = pieces[!is.na(pieces) & (nchar(pieces) > 0)]
+            if (length(pieces) > 0) {
+                annotation_map[[as.character(node_i)]] = paste0(' ', paste(pieces, collapse=' '))
+            }
+            next
+        }
+        if (!is.na(cal_i) && (nchar(cal_i) > 0)) {
+            pieces = c(label_i, cal_i)
+            pieces = pieces[!is.na(pieces) & (nchar(pieces) > 0)]
+            annotation_map[[as.character(node_i)]] = paste0(' [', paste(pieces, collapse=' '), ']')
+            next
+        }
+        if (!is.na(label_i) && (nchar(label_i) > 0)) {
+            annotation_map[[as.character(node_i)]] = paste0(' ', label_i)
+        }
+    }
+
+    duplication_flag = as.integer(any(!is.na(mirror_label_by_node) & (nchar(mirror_label_by_node) > 0)))
+    return(list(annotation_map=annotation_map, duplication_flag=duplication_flag))
+}
+
+build_mcmctree_tree_text = function(phy, gn_node_table, calibration_table, root_num) {
+    annotation_info = build_mcmctree_annotation_map(phy, gn_node_table, calibration_table, root_num)
+    annotation_map = annotation_info$annotation_map
+
+    build_subtree = function(node_num) {
+        if (node_num <= ape::Ntip(phy)) {
+            return(phy$tip.label[[node_num]])
+        }
+        child_nodes = phy$edge[phy$edge[,1] == node_num, 2]
+        child_text = vapply(child_nodes, build_subtree, character(1))
+        node_text = paste0('(', paste(child_text, collapse=','), ')')
+        annotation_text = annotation_map[[as.character(node_num)]]
+        if (is.null(annotation_text) || is.na(annotation_text)) {
+            annotation_text = ''
+        }
+        return(paste0(node_text, annotation_text))
+    }
+
+    root_text = build_subtree(root_num)
+    return(list(tree_text=paste0(root_text, ';'), duplication_flag=annotation_info$duplication_flag))
+}
+
+write_mcmctree_tree_file = function(file, phy, gn_node_table, calibration_table, root_num) {
+    tree_info = build_mcmctree_tree_text(phy, gn_node_table, calibration_table, root_num)
+    writeLines(
+        c(
+            paste(ape::Ntip(phy), 1),
+            tree_info$tree_text
+        ),
+        con=file
+    )
+    return(tree_info)
+}
+
+read_mcmctree_posterior_tree = function(file) {
+    if (!file.exists(file)) {
+        stop('MCMCTree output file was not found: ', file)
+    }
+    lines = readLines(file, warn=FALSE)
+    section_idx = grep('Species tree for FigTree', lines, fixed=TRUE)
+    if (length(section_idx) == 0) {
+        stop('Could not locate the FigTree tree section in the MCMCTree output.')
+    }
+    trees = character(0)
+    current_tree = ''
+    for (i in seq.int(section_idx[[1]] + 1, length(lines))) {
+        line_i = trimws(lines[[i]])
+        if (nchar(line_i) == 0) {
+            next
+        }
+        current_tree = paste0(current_tree, line_i)
+        if (grepl(';$', line_i)) {
+            trees = c(trees, current_tree)
+            current_tree = ''
+            if (length(trees) >= 2) {
+                break
+            }
+        }
+    }
+    if (length(trees) < 2) {
+        stop('Could not extract the posterior mean time tree from the MCMCTree output.')
+    }
+    return(trees[[2]])
+}
+
+write_mcmctree_control_file = function(
+    file,
+    seqfile_name,
+    treefile_name,
+    usedata=1,
+    seqtype=0,
+    clock=2,
+    model=0,
+    burnin=2000,
+    sampfreq=10,
+    nsample=20000,
+    ncatG=5,
+    duplication_flag=0
+) {
+    lines = c(
+        'seed = -1',
+        paste0('seqfile = ', seqfile_name),
+        paste0('treefile = ', treefile_name),
+        'outfile = out.txt',
+        'mcmcfile = mcmc.txt',
+        'ndata = 1',
+        paste0('seqtype = ', seqtype),
+        paste0('usedata = ', usedata),
+        paste0('clock = ', clock),
+        paste0('model = ', model),
+        'alpha = 0',
+        paste0('ncatG = ', ncatG),
+        'cleandata = 0',
+        'BDparas = 1 1 0.1 M',
+        'rgene_gamma = 2 20 1',
+        'sigma2_gamma = 1 10 1',
+        'kappa_gamma = 6 2',
+        'alpha_gamma = 1 1',
+        paste0('burnin = ', burnin),
+        paste0('sampfreq = ', sampfreq),
+        paste0('nsample = ', nsample),
+        paste0('duplication = ', duplication_flag),
+        'print = 1',
+        'finetune = 1: .1 .1 .1 .1 .1 .1'
+    )
+    writeLines(lines, con=file)
+    return(invisible(file))
+}
+
+run_mcmctree_backend = function(
+    phy,
+    gn_node_table,
+    calibration_table,
+    root_num,
+    seqfile,
+    bin='mcmctree',
+    workdir='radte_mcmctree_run',
+    usedata=1,
+    seqtype=0,
+    clock=2,
+    model=0,
+    burnin=2000,
+    sampfreq=10,
+    nsample=20000,
+    ncatG=5
+) {
+    if (!is_nonempty_scalar_string(seqfile)) {
+        stop('--mcmctree_seqfile is required when --dating_backend=mcmctree.')
+    }
+    if (!file.exists(seqfile)) {
+        stop('MCMCTree seqfile was not found: ', seqfile)
+    }
+    bin_path = as.character(bin)
+    if (!grepl('/', bin_path, fixed=TRUE)) {
+        bin_path = Sys.which(bin_path)
+    }
+    if ((!is_nonempty_scalar_string(bin_path)) || (!file.exists(bin_path))) {
+        stop('MCMCTree executable was not found: ', bin)
+    }
+
+    dir.create(workdir, recursive=TRUE, showWarnings=FALSE)
+    workdir_abs = normalizePath(workdir, mustWork=TRUE)
+    seqfile_staged = file.path(workdir_abs, 'seqfile.phy')
+    treefile_staged = file.path(workdir_abs, 'input.trees')
+    ctlfile_staged = file.path(workdir_abs, 'mcmctree.ctl')
+
+    stage_external_input_file(seqfile, seqfile_staged)
+    tree_info = write_mcmctree_tree_file(
+        file=treefile_staged,
+        phy=phy,
+        gn_node_table=gn_node_table,
+        calibration_table=calibration_table,
+        root_num=root_num
+    )
+    write_mcmctree_control_file(
+        file=ctlfile_staged,
+        seqfile_name=basename(seqfile_staged),
+        treefile_name=basename(treefile_staged),
+        usedata=usedata,
+        seqtype=seqtype,
+        clock=clock,
+        model=model,
+        burnin=burnin,
+        sampfreq=sampfreq,
+        nsample=nsample,
+        ncatG=ncatG,
+        duplication_flag=tree_info$duplication_flag
+    )
+
+    old_wd = getwd()
+    on.exit(setwd(old_wd), add=TRUE)
+    setwd(workdir_abs)
+    exit_code = system2(
+        command=bin_path,
+        args=basename(ctlfile_staged),
+        stdout='mcmctree.stdout.log',
+        stderr='mcmctree.stderr.log'
+    )
+    if (exit_code != 0) {
+        stderr_tail = character(0)
+        stdout_tail = character(0)
+        if (file.exists('mcmctree.stderr.log')) {
+            stderr_lines = readLines('mcmctree.stderr.log', warn=FALSE)
+            stderr_tail = tail(stderr_lines, 20)
+        }
+        if (file.exists('mcmctree.stdout.log')) {
+            stdout_lines = readLines('mcmctree.stdout.log', warn=FALSE)
+            stdout_tail = tail(stdout_lines, 20)
+        }
+        stop(
+            'MCMCTree run failed with exit code ',
+            exit_code,
+            '. stderr tail: ',
+            paste(stderr_tail, collapse=' | '),
+            '. stdout tail: ',
+            paste(stdout_tail, collapse=' | ')
+        )
+    }
+
+    out_file = file.path(workdir_abs, 'out.txt')
+    posterior_tree_text = read_mcmctree_posterior_tree(out_file)
+    posterior_tree = read.tree(text=posterior_tree_text)
+    if (is.null(posterior_tree$node.label) || (length(posterior_tree$node.label) != posterior_tree$Nnode)) {
+        posterior_tree$node.label = paste0('mcmctree_node_', seq_len(posterior_tree$Nnode))
+    }
+    posterior_tree = transfer_node_labels(phy_from=phy, phy_to=posterior_tree)
+    return(
+        list(
+            tree=posterior_tree,
+            workdir=workdir_abs,
+            duplication_flag=tree_info$duplication_flag
+        )
+    )
+}
+
 
 cat('arguments:\n')
 args = commandArgs(trailingOnly=TRUE)
@@ -2095,7 +2713,18 @@ if (('generax_nhx' %in% names(args))&('notung_parsable' %in% names(args))) {
     stop('--notung_parsable or --generax_nhx should be specified. Exiting.\n')
 }
 
-required_args = c('species_tree', 'max_age', 'chronos_lambda', 'chronos_model')
+dating_backend = 'chronos'
+if ('dating_backend' %in% names(args)) {
+    dating_backend = parse_choice_arg(args[['dating_backend']], '--dating_backend', c('chronos', 'mcmctree'))
+}
+cat('dating backend:', dating_backend, '\n')
+
+required_args = c('species_tree', 'max_age')
+if (dating_backend == 'chronos') {
+    required_args = c(required_args, 'chronos_lambda', 'chronos_model')
+} else if (dating_backend == 'mcmctree') {
+    required_args = c(required_args, 'mcmctree_seqfile')
+}
 missing_required_args = required_args[!required_args %in% names(args)]
 if (length(missing_required_args) > 0) {
     stop(
@@ -2112,28 +2741,32 @@ max_age = suppressWarnings(as.numeric(args[['max_age']]))
 if (is.na(max_age) || (!is.finite(max_age)) || (max_age <= 0)) {
     stop('--max_age should be a positive finite number.')
 }
-chronos_lambda = suppressWarnings(as.numeric(args[['chronos_lambda']]))
-if (is.na(chronos_lambda) || (!is.finite(chronos_lambda)) || (chronos_lambda < 0)) {
-    stop('--chronos_lambda should be a non-negative finite number.')
-}
-chronos_model = args[['chronos_model']]
-if ((!is.character(chronos_model)) || (length(chronos_model) != 1) || is.na(chronos_model) || (nchar(chronos_model)==0)) {
-    stop('--chronos_model should be a non-empty string.')
-}
-supported_chronos_models = c('discrete', 'relaxed', 'correlated')
-if (!chronos_model %in% supported_chronos_models) {
-    suggestion = ''
-    if (tolower(chronos_model)=='difscrete') {
-        suggestion = ' Did you mean "discrete"?'
+chronos_lambda = NA_real_
+chronos_model = NA_character_
+if (dating_backend == 'chronos') {
+    chronos_lambda = suppressWarnings(as.numeric(args[['chronos_lambda']]))
+    if (is.na(chronos_lambda) || (!is.finite(chronos_lambda)) || (chronos_lambda < 0)) {
+        stop('--chronos_lambda should be a non-negative finite number.')
     }
-    stop(
-        '--chronos_model should be one of: ',
-        paste(supported_chronos_models, collapse=', '),
-        '. Received: ',
-        chronos_model,
-        '.',
-        suggestion
-    )
+    chronos_model = args[['chronos_model']]
+    if ((!is.character(chronos_model)) || (length(chronos_model) != 1) || is.na(chronos_model) || (nchar(chronos_model)==0)) {
+        stop('--chronos_model should be a non-empty string.')
+    }
+    supported_chronos_models = c('discrete', 'relaxed', 'correlated')
+    if (!chronos_model %in% supported_chronos_models) {
+        suggestion = ''
+        if (tolower(chronos_model)=='difscrete') {
+            suggestion = ' Did you mean "discrete"?'
+        }
+        stop(
+            '--chronos_model should be one of: ',
+            paste(supported_chronos_models, collapse=', '),
+            '. Received: ',
+            chronos_model,
+            '.',
+            suggestion
+        )
+    }
 }
 if ('pad_short_edge' %in% names(args)) {
     pad_short_edge = suppressWarnings(as.numeric(args[['pad_short_edge']]))
@@ -2148,30 +2781,98 @@ if ('allow_constraint_drop' %in% names(args)) {
 }
 chronos_attempt_timeout_sec = Inf
 chronos_total_timeout_sec = Inf
-if (!allow_constraint_drop) {
-    # In no-drop mode, avoid hanging forever and fall back deterministically.
-    chronos_attempt_timeout_sec = 60
-    chronos_total_timeout_sec = 300
+if (dating_backend == 'chronos') {
+    if (!allow_constraint_drop) {
+        # In no-drop mode, avoid hanging forever and fall back deterministically.
+        chronos_attempt_timeout_sec = 60
+        chronos_total_timeout_sec = 300
+    }
+    if ('chronos_attempt_timeout_sec' %in% names(args)) {
+        chronos_attempt_timeout_sec = parse_timeout_arg(args[['chronos_attempt_timeout_sec']], '--chronos_attempt_timeout_sec')
+    }
+    if ('chronos_total_timeout_sec' %in% names(args)) {
+        chronos_total_timeout_sec = parse_timeout_arg(args[['chronos_total_timeout_sec']], '--chronos_total_timeout_sec')
+    }
+    if (is.finite(chronos_total_timeout_sec) && is.finite(chronos_attempt_timeout_sec) && (chronos_total_timeout_sec < chronos_attempt_timeout_sec)) {
+        cat(
+            'Adjusting chronos attempt timeout from',
+            chronos_attempt_timeout_sec,
+            'to',
+            chronos_total_timeout_sec,
+            'sec to respect total time budget.\n'
+        )
+        chronos_attempt_timeout_sec = chronos_total_timeout_sec
+    }
+    chronos_timeout_label = if (is.finite(chronos_attempt_timeout_sec)) chronos_attempt_timeout_sec else 'inf'
+    chronos_budget_label = if (is.finite(chronos_total_timeout_sec)) chronos_total_timeout_sec else 'inf'
+    cat('chronos timeout settings: attempt_sec=', chronos_timeout_label, ', total_sec=', chronos_budget_label, '\n', sep='')
 }
-if ('chronos_attempt_timeout_sec' %in% names(args)) {
-    chronos_attempt_timeout_sec = parse_timeout_arg(args[['chronos_attempt_timeout_sec']], '--chronos_attempt_timeout_sec')
-}
-if ('chronos_total_timeout_sec' %in% names(args)) {
-    chronos_total_timeout_sec = parse_timeout_arg(args[['chronos_total_timeout_sec']], '--chronos_total_timeout_sec')
-}
-if (is.finite(chronos_total_timeout_sec) && is.finite(chronos_attempt_timeout_sec) && (chronos_total_timeout_sec < chronos_attempt_timeout_sec)) {
+
+mcmctree_seqfile = NULL
+mcmctree_bin = 'mcmctree'
+mcmctree_workdir = 'radte_mcmctree_run'
+mcmctree_usedata = 1L
+mcmctree_seqtype = 0L
+mcmctree_clock = 2L
+mcmctree_model = 0L
+mcmctree_burnin = 2000L
+mcmctree_sampfreq = 10L
+mcmctree_nsample = 20000L
+mcmctree_ncatG = 5L
+if (dating_backend == 'mcmctree') {
+    mcmctree_seqfile = as.character(args[['mcmctree_seqfile']])
+    if (!is_nonempty_scalar_string(mcmctree_seqfile)) {
+        stop('--mcmctree_seqfile should be a non-empty path.')
+    }
+    if ('mcmctree_bin' %in% names(args)) {
+        mcmctree_bin = as.character(args[['mcmctree_bin']])
+    }
+    if ('mcmctree_workdir' %in% names(args)) {
+        mcmctree_workdir = as.character(args[['mcmctree_workdir']])
+        if (!is_nonempty_scalar_string(mcmctree_workdir)) {
+            stop('--mcmctree_workdir should be a non-empty path.')
+        }
+    }
+    if ('mcmctree_usedata' %in% names(args)) {
+        mcmctree_usedata = parse_integer_arg(args[['mcmctree_usedata']], '--mcmctree_usedata', min_value=1)
+    }
+    if (!mcmctree_usedata %in% c(1L)) {
+        stop('--mcmctree_usedata currently supports only 1 in RADTE.')
+    }
+    if ('mcmctree_seqtype' %in% names(args)) {
+        mcmctree_seqtype = parse_integer_arg(args[['mcmctree_seqtype']], '--mcmctree_seqtype', min_value=0)
+    }
+    if ('mcmctree_clock' %in% names(args)) {
+        mcmctree_clock = parse_integer_arg(args[['mcmctree_clock']], '--mcmctree_clock', min_value=1)
+    }
+    if ('mcmctree_model' %in% names(args)) {
+        mcmctree_model = parse_integer_arg(args[['mcmctree_model']], '--mcmctree_model', min_value=0)
+    }
+    if ('mcmctree_burnin' %in% names(args)) {
+        mcmctree_burnin = parse_integer_arg(args[['mcmctree_burnin']], '--mcmctree_burnin', min_value=1)
+    }
+    if ('mcmctree_sampfreq' %in% names(args)) {
+        mcmctree_sampfreq = parse_integer_arg(args[['mcmctree_sampfreq']], '--mcmctree_sampfreq', min_value=1)
+    }
+    if ('mcmctree_nsample' %in% names(args)) {
+        mcmctree_nsample = parse_integer_arg(args[['mcmctree_nsample']], '--mcmctree_nsample', min_value=1)
+    }
+    if ('mcmctree_ncatG' %in% names(args)) {
+        mcmctree_ncatG = parse_integer_arg(args[['mcmctree_ncatG']], '--mcmctree_ncatG', min_value=1)
+    }
     cat(
-        'Adjusting chronos attempt timeout from',
-        chronos_attempt_timeout_sec,
-        'to',
-        chronos_total_timeout_sec,
-        'sec to respect total time budget.\n'
+        'MCMCTree settings: usedata=', mcmctree_usedata,
+        ', seqtype=', mcmctree_seqtype,
+        ', clock=', mcmctree_clock,
+        ', model=', mcmctree_model,
+        ', burnin=', mcmctree_burnin,
+        ', sampfreq=', mcmctree_sampfreq,
+        ', nsample=', mcmctree_nsample,
+        ', ncatG=', mcmctree_ncatG,
+        '\n',
+        sep=''
     )
-    chronos_attempt_timeout_sec = chronos_total_timeout_sec
 }
-chronos_timeout_label = if (is.finite(chronos_attempt_timeout_sec)) chronos_attempt_timeout_sec else 'inf'
-chronos_budget_label = if (is.finite(chronos_total_timeout_sec)) chronos_total_timeout_sec else 'inf'
-cat('chronos timeout settings: attempt_sec=', chronos_timeout_label, ', total_sec=', chronos_budget_label, '\n', sep='')
 
 species_parser_name = 'legacy'
 if ('species_parser' %in% names(args)) {
@@ -2184,6 +2885,13 @@ if ('species_regex' %in% names(args)) {
 species_map_tsv = NULL
 if ('species_map_tsv' %in% names(args)) {
     species_map_tsv = args[['species_map_tsv']]
+}
+species_node_bounds_tsv = NULL
+if ('species_node_bounds_tsv' %in% names(args)) {
+    species_node_bounds_tsv = as.character(args[['species_node_bounds_tsv']])
+    if (!is_nonempty_scalar_string(species_node_bounds_tsv)) {
+        stop('--species_node_bounds_tsv should be a non-empty path.')
+    }
 }
 species_parser = build_species_parser(
     parser_name=species_parser_name,
@@ -2212,7 +2920,14 @@ sp_tree = force_ultrametric(sp_tree, stop_if_larger_change=0.01)
 root_depth = max(node.depth.edgelength(sp_tree))
 sp_node_ages = abs(node.depth.edgelength(sp_tree) - root_depth)
 sp_node_names = c(sp_tree[['tip.label']], sp_tree[['node.label']])
-sp_node_table = data.frame(node=sp_node_names, age=sp_node_ages, spp=NA, stringsAsFactors=FALSE)
+sp_node_table = data.frame(
+    node=sp_node_names,
+    age=sp_node_ages,
+    age_min=sp_node_ages,
+    age_max=sp_node_ages,
+    spp=NA,
+    stringsAsFactors=FALSE
+)
 for (sp_sub in ape::subtrees(sp_tree)) {
     subroot_node = sp_sub[['node.label']][1]
     sub_species = species_parser_get_species_tip_labels(species_parser, sp_sub[['tip.label']], strict=TRUE)
@@ -2222,7 +2937,15 @@ max_tip_age = max(sp_node_table[is.na(sp_node_table[['spp']]),'age'])
 if (max_tip_age!=0) {
     cat(paste0('Nonzero tip age(s) were detected (max=', max_tip_age, '). Coercing to 0.\n'))
     sp_node_table[is.na(sp_node_table[['spp']]),'age'] = 0
+    sp_node_table[is.na(sp_node_table[['spp']]),'age_min'] = 0
+    sp_node_table[is.na(sp_node_table[['spp']]),'age_max'] = 0
 }
+if (!is.null(species_node_bounds_tsv)) {
+    cat('Reading species node bounds TSV.\n')
+    species_node_bounds = read_species_node_bounds_tsv(species_node_bounds_tsv)
+    sp_node_table = merge_species_node_bounds(sp_node_table, species_node_bounds)
+}
+has_species_node_interval_input = any(abs(sp_node_table[['age_max']] - sp_node_table[['age_min']]) > 1e-12)
 cat('End: species tree processing', '\n\n')
 
 cat('Start: gene tree processing', '\n')
@@ -2322,12 +3045,13 @@ if (mode=='generax') {
     gn_node_table[,'lower_age'] = NA
     gn_node_table[,'upper_age'] = NA
     for (sp_node in sp_node_table[['node']]) {
-        node_age = as.numeric(sp_node_table[(sp_node_table[['node']]==sp_node),'age'])
+        node_age_min = as.numeric(sp_node_table[(sp_node_table[['node']]==sp_node),'age_min'])
+        node_age_max = as.numeric(sp_node_table[(sp_node_table[['node']]==sp_node),'age_max'])
         conditions = (gn_node_table[['lower_sp_node']]==sp_node)
         conditions = conditions & (gn_node_table[['upper_sp_node']]==sp_node)
         conditions[is.na(conditions)] = FALSE
-        gn_node_table[conditions,'lower_age'] = node_age
-        gn_node_table[conditions,'upper_age'] = node_age
+        gn_node_table[conditions,'lower_age'] = node_age_min
+        gn_node_table[conditions,'upper_age'] = node_age_max
     }
     gn_node_table[,'gn_node_num'] = get_node_num_by_name(gn_tree, gn_node_table[['gn_node']])
     gn_node_table = data.frame(gn_node_table[,cols], stringsAsFactors=FALSE)
@@ -2353,11 +3077,11 @@ if (mode=='generax') {
         for (i in 1:nrow(gn_node_table)) {
             lower_sp_node_i = gn_node_table$lower_sp_node[i]
             if ((!is.na(lower_sp_node_i)) && any(sp_node_table$node==lower_sp_node_i)) {
-                gn_node_table$lower_age[i] = sp_node_table$age[sp_node_table$node==lower_sp_node_i]
+                gn_node_table$lower_age[i] = sp_node_table$age_min[sp_node_table$node==lower_sp_node_i]
             }
             upper_sp_node_i = gn_node_table$upper_sp_node[i]
             if ((!is.na(upper_sp_node_i)) && any(sp_node_table$node==upper_sp_node_i)) {
-                gn_node_table$upper_age[i] = sp_node_table$age[sp_node_table$node==upper_sp_node_i]
+                gn_node_table$upper_age[i] = sp_node_table$age_max[sp_node_table$node==upper_sp_node_i]
             }
         }
     } else {
@@ -2400,14 +3124,16 @@ if (mode=='generax') {
             gn_node_table[ind,'gn_node_num'] = root_num
             gn_node_table[ind,'lower_sp_node'] = sp_node
             gn_node_table[ind,'upper_sp_node'] = sp_node
-            gn_node_table[ind,'lower_age'] = node_age
-            gn_node_table[ind,'upper_age'] = node_age
+            gn_node_table[ind,'lower_age'] = sp_node_table[sp_node_table$node==sp_node,'age_min']
+            gn_node_table[ind,'upper_age'] = sp_node_table[sp_node_table$node==sp_node,'age_max']
             gn_node_table[ind,'spp'] = paste(node_spp, collapse='|')
         }
     }
 }
 
 cat('End: gene tree processing', '\n\n')
+gn_node_table = annotate_species_constraint_groups(gn_node_table, gn_tree)
+has_shared_interval_speciation_input = gn_node_table_has_shared_interval_speciation(gn_node_table)
 validate_gn_node_table(gn_node_table)
 validate_duplication_nodes_internal(gn_node_table, gn_tree)
 
@@ -2571,6 +3297,13 @@ num_constrained_speciation = sum(grepl('^S', gn_node_table_calibration[,'event']
 num_constrained_duplication = sum(grepl('^D', gn_node_table_calibration[,'event']))
 cat('Number of constrained speciation nodes:', num_constrained_speciation, '\n')
 cat('Number of constrained duplication nodes:', num_constrained_duplication, '\n')
+if ('shared_speciation_group' %in% colnames(gn_node_table)) {
+    shared_groups = unique(gn_node_table[['shared_speciation_group']])
+    shared_groups = shared_groups[!is.na(shared_groups) & (shared_groups != '')]
+    if (length(shared_groups) > 0) {
+        cat('Number of shared speciation age groups:', length(shared_groups), '\n')
+    }
+}
 
 # Calibration table
 calibration_table = data.frame(
@@ -2599,171 +3332,226 @@ calibration_tables = list(
     'R' = calibration_table_R
 )
 
-# chronos
+# dating
 chronos_out = NULL
-chronos_control = chronos.control()
-chronos_control$iter.max = 100000
-chronos_control$eval.max = 100000
-chronos_control$dual.iter.max = 200
-
+current_calibration_table = calibration_tables[['RS']]
+dating_backend_used = dating_backend
+mcmctree_workdir_used = NA_character_
+chronos_model_used = NA_character_
+chronos_lambda_used = NA_real_
+chronos_seed_used = NA_integer_
 has_duplication_event = any(grepl('^D', gn_node_table$event))
-if (!has_duplication_event) {
-    # Gene tree without duplication nodes
-    calibrated_node = "allS"
-    cat("Constrained nodes:", calibrated_node, '\n')
-    cat("All nodes are speciation nodes. Transferring node ages from species tree without age inference by chronos.", '\n')
-    dup_constraint = NA
-    gn_spp = unique(
-        get_species_names(
-            phy=gn_tree,
-            species_parser=species_parser,
-            species_tree_labels=sp_tree[['tip.label']]
-        )
-    )
-    gn_sp_tips = resolve_species_tree_tips(species_parser, gn_spp, sp_tree[['tip.label']])
-    if (any(is.na(gn_sp_tips))) {
-        stop(
-            'Species tree tip mapping failed for gene-tree species: ',
-            paste(gn_spp[is.na(gn_sp_tips)], collapse=', ')
+has_interval_calibration = has_species_node_interval_input
+has_shared_interval_speciation = has_shared_interval_speciation_input
+
+if (dating_backend == 'chronos') {
+    if (has_shared_interval_speciation) {
+        cat(
+            'chronos backend note: mirrored speciation nodes share the same interval bounds, ',
+            'but chronos cannot force separate internal nodes to have identical estimated ages unless the bounds are exact.\n',
+            sep=''
         )
     }
-    drop_spp = sp_tree$tip.label[! sp_tree$tip.label %in% gn_sp_tips]
-    if (length(drop_spp) > 0) {
-        chronos_out = drop.tip(phy=sp_tree, tip=drop_spp, trim.internal = TRUE)
-    } else {
-        chronos_out = sp_tree
-    }
-    gn_tip_species = species_parser_get_gene_species(
-        species_parser=species_parser,
-        tip_labels=gn_tree$tip.label,
-        species_tree_labels=sp_tree[['tip.label']],
-        strict=TRUE
-    )
-    chronos_tip_species = species_parser_get_species_tip_labels(
-        species_parser=species_parser,
-        tip_labels=chronos_out$tip.label,
-        strict=TRUE
-    )
-    gn_tip_index = c()
-    for (sp in chronos_tip_species) {
-        tip_matches = which(gn_tip_species == sp)
-        if (length(tip_matches) != 1) {
+    chronos_control = chronos.control()
+    chronos_control$iter.max = 100000
+    chronos_control$eval.max = 100000
+    chronos_control$dual.iter.max = 200
+
+    if ((!has_duplication_event) && (!has_interval_calibration)) {
+        # Gene tree without duplication nodes
+        calibrated_node = "allS"
+        cat("Constrained nodes:", calibrated_node, '\n')
+        cat("All nodes are speciation nodes. Transferring node ages from species tree without age inference by chronos.", '\n')
+        gn_spp = unique(
+            get_species_names(
+                phy=gn_tree,
+                species_parser=species_parser,
+                species_tree_labels=sp_tree[['tip.label']]
+            )
+        )
+        gn_sp_tips = resolve_species_tree_tips(species_parser, gn_spp, sp_tree[['tip.label']])
+        if (any(is.na(gn_sp_tips))) {
             stop(
-                'Gene tree tip mapping failed for species ',
-                sp,
-                '. Expected exactly one matching tip but found ',
-                length(tip_matches),
-                '.'
+                'Species tree tip mapping failed for gene-tree species: ',
+                paste(gn_spp[is.na(gn_sp_tips)], collapse=', ')
             )
         }
-        gn_tip_index = c(gn_tip_index, tip_matches)
-    }
-    chronos_out$tip.label = gn_tree$tip.label[gn_tip_index]
-    chronos_out = transfer_node_labels(phy_from=gn_tree, phy_to=chronos_out)
-    current_calibration_table = rbind(calibration_table_R, calibration_table_S)
-} else {
-    # Gene tree with duplication nodes
-    validate_tree_edge_lengths(gn_tree, 'gene tree for chronos')
-    # Normalize edge lengths to prevent numerical overflow in chronos
-    gn_tree = normalize_edge_length_range(gn_tree, max_edge = 1000, min_edge = 1e-8)
-    chronos_out = structure('PLACEHOLDER', class='try-error')
-    calibrated_node = 'RS'
-    current_calibration_table = calibration_tables[['RS']]
-
-    chronos_model_used = chronos_model
-    chronos_lambda_used = chronos_lambda
-    chronos_seed_used = NA_integer_
-    seed_cursor = 1
-    max_restarts_main = 3
-    max_restarts_fallback = 2
-    soft_attempts = list(list(model=chronos_model, lambda=chronos_lambda, label='requested'))
-    if (chronos_model != 'discrete') {
-        soft_attempts[[length(soft_attempts)+1]] = list(model='discrete', lambda=chronos_lambda, label='model-discrete')
-    }
-    if (chronos_model == 'discrete') {
-        if (!isTRUE(all.equal(chronos_lambda, 0.1))) {
-            soft_attempts[[length(soft_attempts)+1]] = list(model='discrete', lambda=0.1, label='lambda0.1')
+        drop_spp = sp_tree$tip.label[! sp_tree$tip.label %in% gn_sp_tips]
+        if (length(drop_spp) > 0) {
+            chronos_out = drop.tip(phy=sp_tree, tip=drop_spp, trim.internal = TRUE)
+        } else {
+            chronos_out = sp_tree
         }
-        if (!isTRUE(all.equal(chronos_lambda, 0))) {
-            soft_attempts[[length(soft_attempts)+1]] = list(model='discrete', lambda=0, label='lambda0')
+        gn_tip_species = species_parser_get_gene_species(
+            species_parser=species_parser,
+            tip_labels=gn_tree$tip.label,
+            species_tree_labels=sp_tree[['tip.label']],
+            strict=TRUE
+        )
+        chronos_tip_species = species_parser_get_species_tip_labels(
+            species_parser=species_parser,
+            tip_labels=chronos_out$tip.label,
+            strict=TRUE
+        )
+        gn_tip_index = c()
+        for (sp in chronos_tip_species) {
+            tip_matches = which(gn_tip_species == sp)
+            if (length(tip_matches) != 1) {
+                stop(
+                    'Gene tree tip mapping failed for species ',
+                    sp,
+                    '. Expected exactly one matching tip but found ',
+                    length(tip_matches),
+                    '.'
+                )
+            }
+            gn_tip_index = c(gn_tip_index, tip_matches)
         }
-    }
-    if (chronos_model != 'relaxed') {
-        soft_attempts[[length(soft_attempts)+1]] = list(model='relaxed', lambda=chronos_lambda, label='model-relaxed')
-    }
-    if (chronos_model != 'correlated') {
-        soft_attempts[[length(soft_attempts)+1]] = list(model='correlated', lambda=chronos_lambda, label='model-correlated')
-    }
-    chronos_time_budget = create_chronos_time_budget(chronos_total_timeout_sec)
-
-    calibration_sequence = 'RS'
-    if (allow_constraint_drop) {
-        calibration_sequence = c('RS', 'S', 'R')
-    }
-    for (cn in calibration_sequence) {
-        if (!("try-error" %in% class(chronos_out))) {
-            break
-        }
-        stage_calibration = calibration_tables[[cn]]
-        if (nrow(stage_calibration) == 0) {
-            cat("\nchronos, calibrated nodes: ", cn, " (skipped; no calibration nodes)\n", sep='')
-            next
-        }
-        if (cn != 'RS') {
-            stage_index = match(cn, calibration_sequence)
-            prev_cn = calibration_sequence[stage_index - 1]
+        chronos_out$tip.label = gn_tree$tip.label[gn_tip_index]
+        chronos_out = transfer_node_labels(phy_from=gn_tree, phy_to=chronos_out)
+        current_calibration_table = rbind(calibration_table_R, calibration_table_S)
+    } else {
+        if (!has_duplication_event) {
             cat(
-                "\nchronos constraint-drop stage: ",
-                prev_cn,
-                " retries were exhausted; retrying with ",
-                cn,
-                " constraints.\n",
+                'All nodes are speciation nodes, but interval age bounds are present. ',
+                'Running chronos to honor age.min/age.max constraints.\n',
                 sep=''
             )
         }
-        calibrated_node = cn
-        stage_out = run_chronos_retry_pipeline(
-            phy=gn_tree,
-            calibration_table=stage_calibration,
-            root_num=root_num,
-            chronos_control=chronos_control,
-            chronos_lambda=chronos_lambda,
-            chronos_model=chronos_model,
-            soft_attempts=soft_attempts,
-            calibration_label=cn,
-            max_restarts_main=max_restarts_main,
-            max_restarts_fallback=max_restarts_fallback,
-            seed_cursor=seed_cursor,
-            attempt_timeout_sec=chronos_attempt_timeout_sec,
-            time_budget=chronos_time_budget
-        )
-        seed_cursor = stage_out$seed_cursor
-        chronos_out = stage_out$chronos_out
-        current_calibration_table = stage_out$calibration_table
-        if (stage_out$success) {
-            gn_tree = stage_out$phy
-            chronos_model_used = stage_out$used_model
-            chronos_lambda_used = stage_out$used_lambda
-            chronos_seed_used = stage_out$used_seed
-        }
-    }
+        validate_tree_edge_lengths(gn_tree, 'gene tree for chronos')
+        # Normalize edge lengths to prevent numerical overflow in chronos
+        gn_tree = normalize_edge_length_range(gn_tree, max_edge = 1000, min_edge = 1e-8)
+        chronos_out = structure('PLACEHOLDER', class='try-error')
+        calibrated_node = 'RS'
+        current_calibration_table = calibration_tables[['RS']]
 
-    if (("try-error" %in% class(chronos_out)) && (!allow_constraint_drop)) {
-        cat("\nchronos, calibrated nodes: RS (deterministic no-drop fallback)\n")
-        deterministic_out = build_dated_tree_without_chronos(
-            phy=gn_tree,
-            calibration_table=current_calibration_table,
-            root_num=root_num
-        )
-        if (!("try-error" %in% class(deterministic_out))) {
-            chronos_out = deterministic_out
-            chronos_model_used = 'deterministic-fallback'
-            chronos_lambda_used = NA_real_
-            chronos_seed_used = NA_integer_
-        } else {
-            cat('deterministic no-drop fallback: failed -> ', as.character(deterministic_out), '\n', sep='')
+        chronos_model_used = chronos_model
+        chronos_lambda_used = chronos_lambda
+        chronos_seed_used = NA_integer_
+        seed_cursor = 1
+        max_restarts_main = 3
+        max_restarts_fallback = 2
+        soft_attempts = list(list(model=chronos_model, lambda=chronos_lambda, label='requested'))
+        if (chronos_model != 'discrete') {
+            soft_attempts[[length(soft_attempts)+1]] = list(model='discrete', lambda=chronos_lambda, label='model-discrete')
+        }
+        if (chronos_model == 'discrete') {
+            if (!isTRUE(all.equal(chronos_lambda, 0.1))) {
+                soft_attempts[[length(soft_attempts)+1]] = list(model='discrete', lambda=0.1, label='lambda0.1')
+            }
+            if (!isTRUE(all.equal(chronos_lambda, 0))) {
+                soft_attempts[[length(soft_attempts)+1]] = list(model='discrete', lambda=0, label='lambda0')
+            }
+        }
+        if (chronos_model != 'relaxed') {
+            soft_attempts[[length(soft_attempts)+1]] = list(model='relaxed', lambda=chronos_lambda, label='model-relaxed')
+        }
+        if (chronos_model != 'correlated') {
+            soft_attempts[[length(soft_attempts)+1]] = list(model='correlated', lambda=chronos_lambda, label='model-correlated')
+        }
+        chronos_time_budget = create_chronos_time_budget(chronos_total_timeout_sec)
+
+        calibration_sequence = 'RS'
+        if (allow_constraint_drop) {
+            calibration_sequence = c('RS', 'S', 'R')
+        }
+        for (cn in calibration_sequence) {
+            if (!("try-error" %in% class(chronos_out))) {
+                break
+            }
+            stage_calibration = calibration_tables[[cn]]
+            if (nrow(stage_calibration) == 0) {
+                cat("\nchronos, calibrated nodes: ", cn, " (skipped; no calibration nodes)\n", sep='')
+                next
+            }
+            if (cn != 'RS') {
+                stage_index = match(cn, calibration_sequence)
+                prev_cn = calibration_sequence[stage_index - 1]
+                cat(
+                    "\nchronos constraint-drop stage: ",
+                    prev_cn,
+                    " retries were exhausted; retrying with ",
+                    cn,
+                    " constraints.\n",
+                    sep=''
+                )
+            }
+            calibrated_node = cn
+            stage_out = run_chronos_retry_pipeline(
+                phy=gn_tree,
+                calibration_table=stage_calibration,
+                root_num=root_num,
+                chronos_control=chronos_control,
+                chronos_lambda=chronos_lambda,
+                chronos_model=chronos_model,
+                soft_attempts=soft_attempts,
+                calibration_label=cn,
+                max_restarts_main=max_restarts_main,
+                max_restarts_fallback=max_restarts_fallback,
+                seed_cursor=seed_cursor,
+                attempt_timeout_sec=chronos_attempt_timeout_sec,
+                time_budget=chronos_time_budget
+            )
+            seed_cursor = stage_out$seed_cursor
+            chronos_out = stage_out$chronos_out
+            current_calibration_table = stage_out$calibration_table
+            if (stage_out$success) {
+                gn_tree = stage_out$phy
+                chronos_model_used = stage_out$used_model
+                chronos_lambda_used = stage_out$used_lambda
+                chronos_seed_used = stage_out$used_seed
+            }
+        }
+
+        if (("try-error" %in% class(chronos_out)) && (!allow_constraint_drop)) {
+            cat("\nchronos, calibrated nodes: RS (deterministic no-drop fallback)\n")
+            deterministic_out = build_dated_tree_without_chronos(
+                phy=gn_tree,
+                calibration_table=current_calibration_table,
+                root_num=root_num
+            )
+            if (!("try-error" %in% class(deterministic_out))) {
+                chronos_out = deterministic_out
+                chronos_model_used = 'deterministic-fallback'
+                chronos_lambda_used = NA_real_
+                chronos_seed_used = NA_integer_
+            } else {
+                cat('deterministic no-drop fallback: failed -> ', as.character(deterministic_out), '\n', sep='')
+            }
         }
     }
+} else if (dating_backend == 'mcmctree') {
+    calibrated_node = 'RS'
+    current_calibration_table = calibration_tables[['RS']]
+    if (nrow(current_calibration_table) == 0) {
+        stop('No root/speciation calibration nodes are available for --dating_backend=mcmctree.')
+    }
+    if ('allow_constraint_drop' %in% names(args)) {
+        cat('--allow_constraint_drop is ignored when --dating_backend=mcmctree.\n')
+    }
+    if (('chronos_attempt_timeout_sec' %in% names(args)) || ('chronos_total_timeout_sec' %in% names(args))) {
+        cat('chronos timeout options are ignored when --dating_backend=mcmctree.\n')
+    }
+    cat('Running MCMCTree backend.\n')
+    mcmctree_out = run_mcmctree_backend(
+        phy=gn_tree,
+        gn_node_table=gn_node_table,
+        calibration_table=current_calibration_table,
+        root_num=root_num,
+        seqfile=mcmctree_seqfile,
+        bin=mcmctree_bin,
+        workdir=mcmctree_workdir,
+        usedata=mcmctree_usedata,
+        seqtype=mcmctree_seqtype,
+        clock=mcmctree_clock,
+        model=mcmctree_model,
+        burnin=mcmctree_burnin,
+        sampfreq=mcmctree_sampfreq,
+        nsample=mcmctree_nsample,
+        ncatG=mcmctree_ncatG
+    )
+    chronos_out = mcmctree_out$tree
+    mcmctree_workdir_used = mcmctree_out$workdir
 }
 
 if ("try-error" %in% class(chronos_out)) {
@@ -2773,7 +3561,7 @@ if ("try-error" %in% class(chronos_out)) {
     chronos_out2 = chronos_out
     num_neg = 1
     counter = 1
-    if (length(args[['pad_short_edge']])) {
+    if ((dating_backend == 'chronos') && length(args[['pad_short_edge']])) {
         while ((num_neg>0)&(counter<100)) {
             cat(paste0('Branch length padding round ', counter, ' started.\n'))
             chronos_out2 = pad_short_edges(chronos_out2, threshold=args[['pad_short_edge']], external_only=FALSE)
@@ -2799,6 +3587,25 @@ if ("try-error" %in% class(chronos_out)) {
 
     sp_node_table$spp = NULL
     write.table(sp_node_table, file='radte_species_tree.tsv', sep='\t', quote=FALSE, row.names=FALSE)
+
+    if ((dating_backend == 'mcmctree') && (!is.na(mcmctree_workdir_used))) {
+        mcmctree_artifacts = c(
+            'mcmctree.ctl',
+            'input.trees',
+            'out.txt',
+            'mcmc.txt',
+            'FigTree.tre',
+            'mcmctree.stdout.log',
+            'mcmctree.stderr.log'
+        )
+        for (artifact in mcmctree_artifacts) {
+            source_artifact = file.path(mcmctree_workdir_used, artifact)
+            if (file.exists(source_artifact)) {
+                target_artifact = paste0('radte_mcmctree_', artifact)
+                file.copy(source_artifact, target_artifact, overwrite=TRUE)
+            }
+        }
+    }
     
     node_nums = (length(chronos_out2[['tip.label']])+1):max(chronos_out2[['edge']])
     noncalibrated_nodes = node_nums[!node_nums %in% current_calibration_table[['node']]]
@@ -2807,19 +3614,28 @@ if ("try-error" %in% class(chronos_out)) {
 	    save_tree_pdf(phy=chronos_out2, file="radte_gene_tree_output.pdf", show.age=TRUE, edge_colors=ec)
 	    save_tree_pdf(phy=sp_tree, file="radte_species_tree.pdf", show.age=TRUE)
 
-	    if (exists('chronos_model_used')) {
+	    cat('dating backend used:', dating_backend_used, '\n')
+	    if (!is.na(chronos_model_used)) {
 	        cat('chronos model used:', chronos_model_used, '\n')
 	    }
-	    if (exists('chronos_lambda_used')) {
+	    if (!is.na(chronos_lambda_used)) {
 	        cat('chronos lambda used:', chronos_lambda_used, '\n')
 	    }
-	    if (exists('chronos_seed_used') && (!is.na(chronos_seed_used))) {
+	    if (!is.na(chronos_seed_used)) {
 	        cat('chronos seed used:', chronos_seed_used, '\n')
+	    }
+	    if (!is.na(mcmctree_workdir_used)) {
+	        cat('MCMCTree workdir:', mcmctree_workdir_used, '\n')
 	    }
 	    cat('Calibrated nodes:', calibrated_node, '\n')
 	    cat('Tree height:', max(ape::node.depth.edgelength(sp_tree)), '\n')
-    is_max_age = (calibration_table[,'age.max']==max_age)
-    num_spnode_used_for_constraint = nrow(unique(calibration_table[!is_max_age,c('age.min','age.max')]))
-    cat('Number of species tree node used for the gene tree constraint:', num_spnode_used_for_constraint, '\n')    
-    cat('Completed: RADTE divergence time estimation', '\n')
+	    constrained_sp_nodes = unique(gn_node_table[
+	        grepl('^S', gn_node_table[['event']]) &
+	        !is.na(gn_node_table[['constraint_sp_node']]) &
+	        (gn_node_table[['constraint_sp_node']] != ''),
+	        'constraint_sp_node'
+	    ])
+	    num_spnode_used_for_constraint = length(constrained_sp_nodes)
+	    cat('Number of species tree node used for the gene tree constraint:', num_spnode_used_for_constraint, '\n')    
+	    cat('Completed: RADTE divergence time estimation', '\n')
 }
