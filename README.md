@@ -137,6 +137,8 @@ Dating engine. Supported values are `chronos` (default) and `mcmctree`.
 When speciation-node intervals are supplied through `--species_node_bounds_tsv`, `chronos` uses those `age.min` / `age.max` bounds but cannot force separate internal nodes to share one estimated age unless the bounds are exact.
 `mcmctree` runs the external **PAML** program **MCMCTree** on the reconciled gene tree using the transferred root/speciation calibrations.
 For repeated speciation events caused by ancestral duplications, RADTE uses **MCMCTree** mirror labels (`#1`, `#2`, ...) so that corresponding gene-tree speciation nodes can share the same age parameter.
+MCMCTree input bounds are preserved exactly as supplied. RADTE does not apply the numerical bound stabilization used by the `chronos` backend; it instead rejects temporally infeasible calibrations and incomplete or inconsistent mirror groups with a diagnostic error.
+After MCMCTree finishes, RADTE independently recalculates every mirrored node age from the posterior mean time tree and stops if members of a shared group differ beyond numerical tolerance.
 The current RADTE integration supports `usedata=1` only and requires a MCMCTree-compatible alignment file.
 **BEAST is not yet integrated.**
 #### `--mcmctree_seqfile`
@@ -276,6 +278,7 @@ To combine `MCMCTree` with species-node CI:
 ```
 
 When the same labeled species-tree node is mapped to multiple gene-tree speciation nodes, RADTE writes **MCMCTree** mirror labels (`#1`, `#2`, ...) so that those nodes share one age parameter.
+Only one member (the `driver`) receives the calibration prior in the generated MCMCTree tree; the remaining `mirror` members reuse it through their common mirror label.
 
 ## Output files
 See `data/example_notung_01` and `data/example_generax_01` for example files.
@@ -295,8 +298,12 @@ This table contains all identified calibration nodes where the divergence time m
 
 #### radte_calibration_used.tsv
 This table is a subset of `radte_calibration_all.tsv` and contain only calibration nodes that are used to transfer the divergence time.
-RADTE first stabilizes risky descendant/ancestor bounds to keep constraints without dropping nodes.
+With the MCMCTree backend, `shared_speciation_group` identifies cross-braced nodes, `mirror_role` distinguishes the `driver` from its `mirror` nodes, and `prior_emitted` records whether a calibration prior was written at that node in the generated MCMCTree tree.
+With the chronos backend, RADTE first stabilizes risky descendant/ancestor bounds to keep constraints without dropping nodes.
 If `--allow_constraint_drop=true` (default), a part of calibration points may still be dropped only when all no-drop attempts fail.
+
+#### radte_shared_speciation_ages.tsv
+This file is written by the MCMCTree backend. It reports each shared species-tree event, its gene-tree member nodes, the posterior mean/minimum/maximum ages, the maximum age difference among members, and the numerical tolerance used for the final mirror consistency check.
 
 #### radte_gene_tree.tsv
 This table summarizes gene tree nodes. 
@@ -334,6 +341,9 @@ Rscript test/run_tests.R
 # Explicit profiles
 RADTE_TEST_PROFILE=full Rscript test/run_tests.R
 RADTE_TEST_PROFILE=fast Rscript test/run_tests.R
+
+# Optional external integration test with PAML/MCMCTree in PATH
+RADTE_RUN_PAML_TESTS=true RADTE_TEST_PROFILE=fast Rscript test/run_tests.R
 ```
 
 ## Citation

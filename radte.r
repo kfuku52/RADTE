@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-radte_version = '0.3.2'
+radte_version = '0.3.3'
 
 #devtools::install_github(repo="cran/ape", ref="master")
 
@@ -2372,11 +2372,111 @@ make_mcmctree_root_calibration_text = function(age_min, age_max, exact_ratio=1e-
     return(paste0('<', format_mcmctree_number(age_max_num)))
 }
 
+validate_mcmctree_calibration_constraints = function(phy, calibration_table) {
+    required_cols = c('node', 'age.min', 'age.max')
+    if (any(!required_cols %in% colnames(calibration_table))) {
+        stop(
+            'MCMCTree calibration table is missing required column(s): ',
+            paste(setdiff(required_cols, colnames(calibration_table)), collapse=', ')
+        )
+    }
+    if (nrow(calibration_table) == 0) {
+        return(invisible(TRUE))
+    }
+
+    node_nums = suppressWarnings(as.integer(calibration_table[['node']]))
+    age_min = suppressWarnings(as.numeric(calibration_table[['age.min']]))
+    age_max = suppressWarnings(as.numeric(calibration_table[['age.max']]))
+    total_nodes = ape::Ntip(phy) + phy$Nnode
+    invalid_node = is.na(node_nums) | (node_nums <= ape::Ntip(phy)) | (node_nums > total_nodes)
+    if (any(invalid_node)) {
+        stop(
+            'MCMCTree calibration table contains invalid internal node number(s): ',
+            paste(unique(node_nums[invalid_node]), collapse=', ')
+        )
+    }
+    if (any(duplicated(node_nums))) {
+        stop(
+            'MCMCTree calibration table contains duplicated node(s): ',
+            paste(unique(node_nums[duplicated(node_nums)]), collapse=', ')
+        )
+    }
+    invalid_bounds = is.na(age_min) | (!is.finite(age_min)) | is.na(age_max) | (!is.finite(age_max))
+    if (any(invalid_bounds)) {
+        stop(
+            'MCMCTree calibration table contains missing or non-finite bound(s) for node(s): ',
+            paste(node_nums[invalid_bounds], collapse=', ')
+        )
+    }
+    if (any(age_min < 0) || any(age_max < 0)) {
+        stop('MCMCTree calibration table contains negative age bound(s).')
+    }
+    reversed_bounds = age_max < age_min
+    if (any(reversed_bounds)) {
+        stop(
+            'MCMCTree calibration table contains age.max younger than age.min for node(s): ',
+            paste(node_nums[reversed_bounds], collapse=', ')
+        )
+    }
+
+    for (i in seq_len(nrow(calibration_table))) {
+        child_node = node_nums[[i]]
+        ancestor_nodes = intersect(get_ancestor_num(phy, child_node), node_nums)
+        if (length(ancestor_nodes) == 0) {
+            next
+        }
+        for (ancestor_node in ancestor_nodes) {
+            ancestor_i = match(ancestor_node, node_nums)
+            if (age_min[[i]] >= age_max[[ancestor_i]]) {
+                child_name = get_node_name_by_num(phy, child_node)
+                ancestor_name = get_node_name_by_num(phy, ancestor_node)
+                stop(
+                    'MCMCTree calibration bounds are temporally infeasible: descendant ',
+                    child_name,
+                    ' (node ',
+                    child_node,
+                    ', age.min=',
+                    age_min[[i]],
+                    ') is not younger than ancestor ',
+                    ancestor_name,
+                    ' (node ',
+                    ancestor_node,
+                    ', age.max=',
+                    age_max[[ancestor_i]],
+                    '). Bounds are preserved; revise the input constraints.'
+                )
+            }
+        }
+    }
+    return(invisible(TRUE))
+}
+
+empty_mcmctree_mirror_table = function() {
+    return(
+        data.frame(
+            shared_speciation_group=character(),
+            node=integer(),
+            gn_node=character(),
+            mirror_label=character(),
+            mirror_role=character(),
+            prior_emitted=logical(),
+            stringsAsFactors=FALSE
+        )
+    )
+}
+
 build_mcmctree_annotation_map = function(phy, gn_node_table, calibration_table, root_num) {
     total_nodes = ape::Ntip(phy) + phy$Nnode
     annotation_map = setNames(as.list(rep('', total_nodes)), as.character(seq_len(total_nodes)))
+    validate_mcmctree_calibration_constraints(phy, calibration_table)
     if (nrow(gn_node_table) == 0) {
-        return(list(annotation_map=annotation_map, duplication_flag=0L))
+        return(
+            list(
+                annotation_map=annotation_map,
+                duplication_flag=0L,
+                mirror_table=empty_mcmctree_mirror_table()
+            )
+        )
     }
 
     calibration_text_by_node = rep(NA_character_, total_nodes)
@@ -2420,25 +2520,89 @@ build_mcmctree_annotation_map = function(phy, gn_node_table, calibration_table, 
     if (nrow(spec_rows) > 0) {
         spec_rows[['mirror_group']] = mirror_group[match(spec_rows[['gn_node_num']], gn_node_table[['gn_node_num']])]
     }
+    mirror_table = empty_mcmctree_mirror_table()
     if (nrow(spec_rows) > 0) {
         spec_groups = split(spec_rows, spec_rows$mirror_group)
         label_counter = 1L
         for (group_name in names(spec_groups)) {
             group_df = spec_groups[[group_name]]
             if (nrow(group_df) < 2) {
-                next
+                stop(
+                    'MCMCTree shared speciation group ',
+                    group_name,
+                    ' has fewer than two member nodes.'
+                )
             }
             node_nums = sort(unique(as.integer(group_df$gn_node_num)))
+            for (node_i in node_nums) {
+                other_nodes = setdiff(node_nums, node_i)
+                ancestral_members = intersect(get_ancestor_num(phy, node_i), other_nodes)
+                if (length(ancestral_members) > 0) {
+                    stop(
+                        'MCMCTree shared speciation group ',
+                        group_name,
+                        ' contains an ancestor-descendant pair: ',
+                        get_node_name_by_num(phy, node_i),
+                        ' (node ',
+                        node_i,
+                        ') and ',
+                        get_node_name_by_num(phy, ancestral_members[[1]]),
+                        ' (node ',
+                        ancestral_members[[1]],
+                        '). Shared ages would create a zero-length path.'
+                    )
+                }
+            }
             group_rows = calibration_table[calibration_table$node %in% node_nums, , drop=FALSE]
             has_complete_group = (nrow(group_rows) == length(node_nums))
-            is_same_bounds = FALSE
-            if (has_complete_group) {
-                rounded_min = round(as.numeric(group_rows$age.min), digits=10)
-                rounded_max = round(as.numeric(group_rows$age.max), digits=10)
-                is_same_bounds = (length(unique(rounded_min)) == 1) && (length(unique(rounded_max)) == 1)
+            if (!has_complete_group) {
+                missing_nodes = setdiff(node_nums, as.integer(group_rows$node))
+                missing_names = vapply(
+                    missing_nodes,
+                    function(node_i) paste0(get_node_name_by_num(phy, node_i), ' (node ', node_i, ')'),
+                    character(1)
+                )
+                stop(
+                    'MCMCTree shared speciation group ',
+                    group_name,
+                    ' is missing calibration row(s) for: ',
+                    paste(missing_names, collapse=', '),
+                    '.'
+                )
             }
+            group_rows = group_rows[match(node_nums, as.integer(group_rows$node)), , drop=FALSE]
+            group_min = as.numeric(group_rows$age.min)
+            group_max = as.numeric(group_rows$age.max)
+            bounds_scale = max(1, abs(c(group_min, group_max)))
+            bounds_tolerance = bounds_scale * 1e-10
+            is_same_bounds = (
+                all(abs(group_min - group_min[[1]]) <= bounds_tolerance) &&
+                all(abs(group_max - group_max[[1]]) <= bounds_tolerance)
+            )
             if (!is_same_bounds) {
-                next
+                bounds_text = vapply(
+                    seq_along(node_nums),
+                    function(i) {
+                        paste0(
+                            get_node_name_by_num(phy, node_nums[[i]]),
+                            ' (node ',
+                            node_nums[[i]],
+                            ')=[',
+                            format_mcmctree_number(group_min[[i]]),
+                            ',',
+                            format_mcmctree_number(group_max[[i]]),
+                            ']'
+                        )
+                    },
+                    character(1)
+                )
+                stop(
+                    'MCMCTree shared speciation group ',
+                    group_name,
+                    ' has inconsistent calibration bounds: ',
+                    paste(bounds_text, collapse='; '),
+                    '.'
+                )
             }
             label_text = paste0('#', label_counter)
             mirror_label_by_node[node_nums] = label_text
@@ -2447,6 +2611,23 @@ build_mcmctree_annotation_map = function(phy, gn_node_table, calibration_table, 
             if (length(drop_nodes) > 0) {
                 calibration_text_by_node[drop_nodes] = NA_character_
             }
+            group_node_names = vapply(
+                node_nums,
+                function(node_i) get_node_name_by_num(phy, node_i),
+                character(1)
+            )
+            mirror_table = rbind(
+                mirror_table,
+                data.frame(
+                    shared_speciation_group=rep(group_name, length(node_nums)),
+                    node=node_nums,
+                    gn_node=group_node_names,
+                    mirror_label=rep(label_text, length(node_nums)),
+                    mirror_role=ifelse(node_nums == keep_node, 'driver', 'mirror'),
+                    prior_emitted=(node_nums == keep_node),
+                    stringsAsFactors=FALSE
+                )
+            )
             label_counter = label_counter + 1L
         }
     }
@@ -2475,7 +2656,13 @@ build_mcmctree_annotation_map = function(phy, gn_node_table, calibration_table, 
     }
 
     duplication_flag = as.integer(any(!is.na(mirror_label_by_node) & (nchar(mirror_label_by_node) > 0)))
-    return(list(annotation_map=annotation_map, duplication_flag=duplication_flag))
+    return(
+        list(
+            annotation_map=annotation_map,
+            duplication_flag=duplication_flag,
+            mirror_table=mirror_table
+        )
+    )
 }
 
 build_mcmctree_tree_text = function(phy, gn_node_table, calibration_table, root_num) {
@@ -2497,7 +2684,13 @@ build_mcmctree_tree_text = function(phy, gn_node_table, calibration_table, root_
     }
 
     root_text = build_subtree(root_num)
-    return(list(tree_text=paste0(root_text, ';'), duplication_flag=annotation_info$duplication_flag))
+    return(
+        list(
+            tree_text=paste0(root_text, ';'),
+            duplication_flag=annotation_info$duplication_flag,
+            mirror_table=annotation_info$mirror_table
+        )
+    )
 }
 
 write_mcmctree_tree_file = function(file, phy, gn_node_table, calibration_table, root_num) {
@@ -2541,6 +2734,170 @@ read_mcmctree_posterior_tree = function(file) {
         stop('Could not extract the posterior mean time tree from the MCMCTree output.')
     }
     return(trees[[2]])
+}
+
+empty_shared_speciation_age_summary = function() {
+    return(
+        data.frame(
+            species_node=character(),
+            gn_nodes=character(),
+            member_count=integer(),
+            posterior_mean=numeric(),
+            posterior_min=numeric(),
+            posterior_max=numeric(),
+            max_member_age_diff=numeric(),
+            tolerance=numeric(),
+            stringsAsFactors=FALSE
+        )
+    )
+}
+
+summarize_shared_speciation_ages = function(
+    phy,
+    gn_node_table,
+    tolerance=NULL,
+    fail_on_mismatch=TRUE
+) {
+    required_cols = c('gn_node', 'gn_node_num', 'event', 'shared_speciation_group')
+    if ((nrow(gn_node_table) == 0) || any(!required_cols %in% colnames(gn_node_table))) {
+        return(empty_shared_speciation_age_summary())
+    }
+    is_shared = (
+        grepl('^S', gn_node_table[['event']]) &
+        !is.na(gn_node_table[['shared_speciation_group']]) &
+        (gn_node_table[['shared_speciation_group']] != '')
+    )
+    is_shared[is.na(is_shared)] = FALSE
+    shared_rows = gn_node_table[is_shared, , drop=FALSE]
+    if (nrow(shared_rows) == 0) {
+        return(empty_shared_speciation_age_summary())
+    }
+
+    depth_values = ape::node.depth.edgelength(phy)
+    if (length(depth_values) != (ape::Ntip(phy) + phy$Nnode) || any(!is.finite(depth_values))) {
+        stop('Could not compute finite node ages for MCMCTree shared speciation QA.')
+    }
+    tree_height = max(depth_values[seq_len(ape::Ntip(phy))])
+    if (is.null(tolerance)) {
+        tolerance = max(1e-6, abs(tree_height) * 1e-6)
+    }
+    tolerance = suppressWarnings(as.numeric(tolerance))
+    if (is.na(tolerance) || (!is.finite(tolerance)) || (tolerance < 0)) {
+        stop('Shared speciation posterior age tolerance should be a non-negative finite number.')
+    }
+
+    summary_table = empty_shared_speciation_age_summary()
+    shared_groups = split(shared_rows, shared_rows$shared_speciation_group)
+    for (group_name in names(shared_groups)) {
+        group_df = shared_groups[[group_name]]
+        if (nrow(group_df) < 2) {
+            stop('Shared speciation posterior QA group ', group_name, ' has fewer than two member nodes.')
+        }
+        gn_nodes = as.character(group_df[['gn_node']])
+        posterior_node_nums = vapply(
+            gn_nodes,
+            function(node_name) {
+                matched_nodes = get_node_num_by_name(phy, node_name)
+                if (length(matched_nodes) != 1) {
+                    stop(
+                        'Could not uniquely map shared speciation node ',
+                        node_name,
+                        ' into the MCMCTree posterior tree.'
+                    )
+                }
+                return(as.integer(matched_nodes[[1]]))
+            },
+            integer(1)
+        )
+        member_ages = tree_height - depth_values[posterior_node_nums]
+        age_min = min(member_ages)
+        age_max = max(member_ages)
+        max_diff = age_max - age_min
+        summary_table = rbind(
+            summary_table,
+            data.frame(
+                species_node=group_name,
+                gn_nodes=paste(gn_nodes, collapse=','),
+                member_count=length(gn_nodes),
+                posterior_mean=mean(member_ages),
+                posterior_min=age_min,
+                posterior_max=age_max,
+                max_member_age_diff=max_diff,
+                tolerance=tolerance,
+                stringsAsFactors=FALSE
+            )
+        )
+        if (isTRUE(fail_on_mismatch) && (max_diff > tolerance)) {
+            age_text = paste0(gn_nodes, '=', format(member_ages, digits=15), collapse=', ')
+            stop(
+                'MCMCTree shared speciation posterior ages differ for group ',
+                group_name,
+                ': ',
+                age_text,
+                '. Maximum difference ',
+                format(max_diff, digits=15),
+                ' exceeds tolerance ',
+                format(tolerance, digits=15),
+                '.'
+            )
+        }
+    }
+    return(summary_table)
+}
+
+annotate_calibration_output = function(
+    calibration_table,
+    gn_node_table,
+    mirror_table=NULL,
+    emitted_nodes=NULL
+) {
+    calibration_out = calibration_table
+    calibration_out[['.input_order']] = seq_len(nrow(calibration_out))
+    metadata_cols = intersect(
+        c('gn_node_num', 'gn_node', 'event', 'shared_speciation_group'),
+        colnames(gn_node_table)
+    )
+    node_metadata = gn_node_table[, metadata_cols, drop=FALSE]
+    calibration_out = merge(
+        calibration_out,
+        node_metadata,
+        by.x='node',
+        by.y='gn_node_num',
+        all.x=TRUE,
+        sort=FALSE
+    )
+    calibration_out = calibration_out[order(calibration_out[['.input_order']]), , drop=FALSE]
+    calibration_out[['.input_order']] = NULL
+    if (!('shared_speciation_group' %in% colnames(calibration_out))) {
+        calibration_out[['shared_speciation_group']] = NA_character_
+    }
+    calibration_out[['mirror_role']] = NA_character_
+    calibration_out[['prior_emitted']] = NA
+
+    if (!is.null(mirror_table)) {
+        if (is.null(emitted_nodes)) {
+            emitted_nodes = as.integer(calibration_out[['node']])
+        }
+        emitted_nodes = as.integer(emitted_nodes)
+        calibration_out[['prior_emitted']] = as.integer(calibration_out[['node']]) %in% emitted_nodes
+        if (nrow(mirror_table) > 0) {
+            mirror_idx = match(as.integer(calibration_out[['node']]), as.integer(mirror_table[['node']]))
+            has_mirror = !is.na(mirror_idx)
+            calibration_out[has_mirror, 'shared_speciation_group'] = mirror_table[
+                mirror_idx[has_mirror],
+                'shared_speciation_group'
+            ]
+            calibration_out[has_mirror, 'mirror_role'] = mirror_table[
+                mirror_idx[has_mirror],
+                'mirror_role'
+            ]
+            calibration_out[has_mirror, 'prior_emitted'] = (
+                mirror_table[mirror_idx[has_mirror], 'prior_emitted'] &
+                (as.integer(calibration_out[has_mirror, 'node']) %in% emitted_nodes)
+            )
+        }
+    }
+    return(calibration_out)
 }
 
 write_mcmctree_control_file = function(
@@ -2684,11 +3041,18 @@ run_mcmctree_backend = function(
         posterior_tree$node.label = paste0('mcmctree_node_', seq_len(posterior_tree$Nnode))
     }
     posterior_tree = transfer_node_labels(phy_from=phy, phy_to=posterior_tree)
+    shared_speciation_ages = summarize_shared_speciation_ages(
+        phy=posterior_tree,
+        gn_node_table=gn_node_table,
+        fail_on_mismatch=TRUE
+    )
     return(
         list(
             tree=posterior_tree,
             workdir=workdir_abs,
-            duplication_flag=tree_info$duplication_flag
+            duplication_flag=tree_info$duplication_flag,
+            mirror_table=tree_info$mirror_table,
+            shared_speciation_ages=shared_speciation_ages
         )
     )
 }
@@ -3201,6 +3565,7 @@ if (sum(is_root_row) != 1) {
 }
 gn_node_table[is_root_row,'event'] = ensure_root_event_tag(gn_node_table[is_root_row,'event'])
 
+if (dating_backend == 'chronos') {
 constraint_conflicts_before = find_descendant_constraint_conflicts(gn_node_table, gn_tree, root_num)
 if (nrow(constraint_conflicts_before) > 0) {
     cat('Potential chronos failure risk was detected: descendant constraint is identical to or older than an ancestor constraint.\n')
@@ -3291,6 +3656,9 @@ if (nrow(constraint_conflicts_after) > 0) {
         format_limited_values(unresolved_nodes, max_items=50)
     )
 }
+} else {
+    cat('MCMCTree backend: preserving input calibration bounds without chronos stabilization.\n')
+}
 cat('\n')
 gn_node_table_calibration = gn_node_table[(gn_node_table[,'gn_node_num']>ape::Ntip(gn_tree)),]
 num_constrained_speciation = sum(grepl('^S', gn_node_table_calibration[,'event']))
@@ -3337,6 +3705,8 @@ chronos_out = NULL
 current_calibration_table = calibration_tables[['RS']]
 dating_backend_used = dating_backend
 mcmctree_workdir_used = NA_character_
+mcmctree_mirror_table = NULL
+shared_speciation_age_summary = empty_shared_speciation_age_summary()
 chronos_model_used = NA_character_
 chronos_lambda_used = NA_real_
 chronos_seed_used = NA_integer_
@@ -3552,6 +3922,8 @@ if (dating_backend == 'chronos') {
     )
     chronos_out = mcmctree_out$tree
     mcmctree_workdir_used = mcmctree_out$workdir
+    mcmctree_mirror_table = mcmctree_out$mirror_table
+    shared_speciation_age_summary = mcmctree_out$shared_speciation_ages
 }
 
 if ("try-error" %in% class(chronos_out)) {
@@ -3575,12 +3947,33 @@ if ("try-error" %in% class(chronos_out)) {
     write(calibrated_node, file='radte_calibrated_nodes.txt')
 
     write.tree(chronos_out2, file="radte_gene_tree_output.nwk")
-    current_calibration_table = merge(current_calibration_table, gn_node_table[,c('gn_node_num','event')], by.x='node', by.y='gn_node_num', all.x=TRUE)
+    emitted_calibration_nodes = as.integer(current_calibration_table[['node']])
+    current_calibration_table = annotate_calibration_output(
+        calibration_table=current_calibration_table,
+        gn_node_table=gn_node_table,
+        mirror_table=mcmctree_mirror_table,
+        emitted_nodes=emitted_calibration_nodes
+    )
     current_calibration_table[current_calibration_table$node==calibration_table_R$node,'event'] = 'R'
     write.table(current_calibration_table, file='radte_calibration_used.tsv', sep='\t', quote=FALSE, row.names=FALSE)
 
-    calibration_table = merge(calibration_table, gn_node_table[,c('gn_node_num','event')], by.x='node', by.y='gn_node_num', all.x=TRUE)
+    calibration_table = annotate_calibration_output(
+        calibration_table=calibration_table,
+        gn_node_table=gn_node_table,
+        mirror_table=mcmctree_mirror_table,
+        emitted_nodes=emitted_calibration_nodes
+    )
     write.table(calibration_table, file='radte_calibration_all.tsv', sep='\t', quote=FALSE, row.names=FALSE)
+
+    if (dating_backend == 'mcmctree') {
+        write.table(
+            shared_speciation_age_summary,
+            file='radte_shared_speciation_ages.tsv',
+            sep='\t',
+            quote=FALSE,
+            row.names=FALSE
+        )
+    }
 
     gn_node_table$spp = NULL
     write.table(gn_node_table, file='radte_gene_tree.tsv', sep='\t', quote=FALSE, row.names=FALSE)
