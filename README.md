@@ -280,6 +280,10 @@ To combine `MCMCTree` with species-node CI:
 When the same labeled species-tree node is mapped to multiple gene-tree speciation nodes, RADTE writes **MCMCTree** mirror labels (`#1`, `#2`, ...) so that those nodes share one age parameter.
 Only one member (the `driver`) receives the calibration prior in the generated MCMCTree tree; the remaining `mirror` members reuse it through their common mirror label.
 
+![How RADTE mirrors repeated speciation nodes in MCMCTree](img/mcmctree_speciation_mirror.svg)
+
+The ancestral duplication in this example produces two gene-tree nodes for the same `sp_ab` species-tree event. RADTE emits the calibration prior once at the `driver` node and assigns the same mirror label to both nodes, making their estimated ages identical.
+
 ## Output files
 See `data/example_notung_01` and `data/example_generax_01` for example files.
 

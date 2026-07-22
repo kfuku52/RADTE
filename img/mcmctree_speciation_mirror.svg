@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="680" viewBox="0 0 1440 680" role="img" aria-labelledby="title desc">
+  <title id="title">MCMCTree mirror labels for repeated speciation nodes</title>
+  <desc id="desc">Species A and B diverge after their lineage separates from species C. An ancestral gene duplication predates both speciation events. In the illustrated gene tree, the first paralog clade contains A, B and C genes, while the second contains A and B genes. Consequently, the A and B divergence called sp_ab appears at two gene-tree nodes, whereas the older C versus A and B divergence appears at only one explicit internal node. RADTE marks one sp_ab node as the MCMCTree driver with a calibration prior and the other as its mirror, so both use one shared age parameter.</desc>
+
+  <defs>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#172033" flood-opacity="0.10"/>
+    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#667085"/>
+    </marker>
+    <marker id="blue-arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563EB"/>
+    </marker>
+    <style>
+      .title { font: 700 28px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #172033; }
+      .subtitle { font: 400 16px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #5B6474; }
+      .panel-title { font: 700 19px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #172033; }
+      .panel-copy { font: 400 14px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #5B6474; }
+      .label { font: 600 14px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #344054; }
+      .small { font: 400 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #667085; }
+      .code { font: 600 15px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #172033; }
+      .tree { fill: none; stroke: #344054; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+
+  <rect width="1440" height="680" fill="#F8FAFC"/>
+  <text class="title" x="40" y="48">MCMCTree mirror labels for repeated speciation nodes</text>
+  <text class="subtitle" x="40" y="76">RADTE links gene-tree nodes derived from the same species-tree event to one shared divergence age.</text>
+
+  <!-- Panel 1: species tree -->
+  <g filter="url(#shadow)">
+    <rect x="40" y="108" width="330" height="520" rx="18" fill="#FFFFFF"/>
+  </g>
+  <circle cx="70" cy="140" r="16" fill="#2563EB"/>
+  <text x="70" y="145" text-anchor="middle" style="font:700 14px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;fill:#FFFFFF">1</text>
+  <text class="panel-title" x="96" y="147">Species-tree event</text>
+  <text class="panel-copy" x="70" y="178">A and B diverge once in the species tree.</text>
+
+  <path class="tree" d="M 83 357 L 140 357 L 220 252 M 140 357 L 305 455 M 220 252 L 315 205 M 220 252 L 315 299"/>
+  <circle cx="140" cy="357" r="6" fill="#FFFFFF" stroke="#94A3B8" stroke-width="3"/>
+  <circle cx="220" cy="252" r="10" fill="#FFFFFF" stroke="#2563EB" stroke-width="5"/>
+  <text class="small" x="86" y="342">sp_abc</text>
+  <text class="label" x="323" y="210">A</text>
+  <text class="label" x="323" y="304">B</text>
+  <text class="label" x="313" y="460">C</text>
+  <rect x="166" y="325" width="108" height="32" rx="16" fill="#EAF2FF"/>
+  <text x="220" y="346" text-anchor="middle" style="font:700 14px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;fill:#1D4ED8">sp_ab</text>
+  <path d="M 220 285 L 220 320" stroke="#2563EB" stroke-width="2" stroke-dasharray="4 5"/>
+
+  <rect x="70" y="512" width="270" height="70" rx="12" fill="#EFF6FF" stroke="#BFDBFE"/>
+  <text x="205" y="540" text-anchor="middle" style="font:600 13px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;fill:#1E40AF">one divergence age</text>
+  <text x="205" y="568" text-anchor="middle" style="font:700 22px ui-monospace, SFMono-Regular, Menlo, monospace;fill:#1D4ED8">t(sp_ab)</text>
+
+  <!-- connector 1 to 2 -->
+  <path d="M 378 367 L 403 367" stroke="#667085" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Panel 2: reconciled gene tree -->
+  <g filter="url(#shadow)">
+    <rect x="410" y="108" width="610" height="520" rx="18" fill="#FFFFFF"/>
+  </g>
+  <circle cx="440" cy="140" r="16" fill="#2563EB"/>
+  <text x="440" y="145" text-anchor="middle" style="font:700 14px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;fill:#FFFFFF">2</text>
+  <text class="panel-title" x="466" y="147">Repeated in the gene tree</text>
+  <text class="panel-copy" x="440" y="178">The same A–B event occurs in both paralog clades.</text>
+
+  <path class="tree" d="M 458 365 L 520 365 M 520 365 L 620 270 M 620 270 L 710 230 M 620 270 L 920 305 M 710 230 L 920 205 M 710 230 L 920 250 M 520 365 L 710 425 M 710 425 L 920 400 M 710 425 L 920 445"/>
+
+  <!-- duplication node -->
+  <rect x="510" y="355" width="20" height="20" rx="3" fill="#F59E0B" stroke="#FFFFFF" stroke-width="3" transform="rotate(45 520 365)"/>
+  <text x="491" y="394" style="font:700 13px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;fill:#B45309">D</text>
+  <text class="small" x="455" y="414">ancestral duplication</text>
+
+  <!-- the older C-(A,B) speciation is explicit only in paralog 1 -->
+  <circle cx="620" cy="270" r="6" fill="#FFFFFF" stroke="#94A3B8" stroke-width="3"/>
+  <circle cx="710" cy="230" r="10" fill="#FFFFFF" stroke="#2563EB" stroke-width="5"/>
+  <circle cx="710" cy="425" r="10" fill="#FFFFFF" stroke="#2563EB" stroke-width="5"/>
+  <text x="686" y="219" text-anchor="end" style="font:700 14px ui-monospace, SFMono-Regular, Menlo, monospace;fill:#1D4ED8">n1</text>
+  <text x="686" y="414" text-anchor="end" style="font:700 14px ui-monospace, SFMono-Regular, Menlo, monospace;fill:#1D4ED8">n2</text>
+
+  <text class="label" x="932" y="210">A1</text>
+  <text class="label" x="932" y="255">B1</text>
+  <text class="label" x="932" y="310">C1</text>
+  <text class="label" x="932" y="405">A2</text>
+  <text class="label" x="932" y="450">B2</text>
+  <text x="480" y="222" style="font:700 11px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;letter-spacing:0.8px;fill:#64748B">PARALOG 1</text>
+  <text x="480" y="500" style="font:700 11px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;letter-spacing:0.8px;fill:#64748B">PARALOG 2</text>
+
+  <path d="M 755 341 C 732 322, 721 275, 715 243" fill="none" stroke="#2563EB" stroke-width="2" marker-end="url(#blue-arrow)"/>
+  <path d="M 755 376 C 733 390, 722 407, 715 415" fill="none" stroke="#2563EB" stroke-width="2" marker-end="url(#blue-arrow)"/>
+  <rect x="755" y="327" width="190" height="66" rx="12" fill="#EFF6FF" stroke="#BFDBFE"/>
+  <text x="850" y="352" text-anchor="middle" style="font:600 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;fill:#1E40AF">both map to species event</text>
+  <text x="850" y="376" text-anchor="middle" style="font:700 16px ui-monospace, SFMono-Regular, Menlo, monospace;fill:#1D4ED8">sp_ab</text>
+
+  <rect x="448" y="552" width="534" height="49" rx="10" fill="#F8FAFC" stroke="#E2E8F0"/>
+  <circle cx="470" cy="576" r="7" fill="#FFFFFF" stroke="#2563EB" stroke-width="3"/>
+  <text class="small" x="485" y="580">mirrored sp_ab</text>
+  <circle cx="680" cy="576" r="5" fill="#FFFFFF" stroke="#94A3B8" stroke-width="2.5"/>
+  <text class="small" x="693" y="580">sp_abc</text>
+  <rect x="816" y="569" width="14" height="14" rx="2" fill="#F59E0B" transform="rotate(45 823 576)"/>
+  <text class="small" x="840" y="580">duplication</text>
+
+  <!-- connector 2 to 3 -->
+  <path d="M 1028 367 L 1053 367" stroke="#667085" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Panel 3: MCMCTree annotations -->
+  <g filter="url(#shadow)">
+    <rect x="1060" y="108" width="340" height="520" rx="18" fill="#FFFFFF"/>
+  </g>
+  <circle cx="1090" cy="140" r="16" fill="#2563EB"/>
+  <text x="1090" y="145" text-anchor="middle" style="font:700 14px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;fill:#FFFFFF">3</text>
+  <text class="panel-title" x="1116" y="147">One shared age</text>
+  <text class="panel-copy" x="1090" y="178">RADTE writes one prior and repeats its label.</text>
+
+  <rect x="1090" y="211" width="280" height="82" rx="12" fill="#EFF6FF" stroke="#93C5FD" stroke-width="2"/>
+  <rect x="1104" y="225" width="62" height="20" rx="10" fill="#2563EB"/>
+  <text x="1135" y="239" text-anchor="middle" style="font:700 10px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;letter-spacing:0.8px;fill:#FFFFFF">DRIVER</text>
+  <text class="code" x="1105" y="272">n1  #1 B{lower, upper}</text>
+
+  <rect x="1090" y="324" width="280" height="82" rx="12" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="2"/>
+  <rect x="1104" y="338" width="62" height="20" rx="10" fill="#64748B"/>
+  <text x="1135" y="352" text-anchor="middle" style="font:700 10px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;letter-spacing:0.8px;fill:#FFFFFF">MIRROR</text>
+  <text class="code" x="1105" y="385">n2  #1</text>
+
+  <path d="M 1160 297 L 1203 443" fill="none" stroke="#2563EB" stroke-width="2" marker-end="url(#blue-arrow)"/>
+  <path d="M 1160 410 L 1203 443" fill="none" stroke="#2563EB" stroke-width="2" marker-end="url(#blue-arrow)"/>
+
+  <rect x="1090" y="446" width="280" height="100" rx="14" fill="#1D4ED8"/>
+  <text x="1230" y="474" text-anchor="middle" style="font:600 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;letter-spacing:0.7px;fill:#DBEAFE">SHARED PARAMETER</text>
+  <text x="1230" y="506" text-anchor="middle" style="font:700 22px ui-monospace, SFMono-Regular, Menlo, monospace;fill:#FFFFFF">t(sp_ab)</text>
+  <text x="1230" y="530" text-anchor="middle" style="font:600 14px ui-monospace, SFMono-Regular, Menlo, monospace;fill:#DBEAFE">age(n1) = age(n2)</text>
+
+  <text x="1230" y="582" text-anchor="middle" style="font:600 13px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;fill:#344054">one prior • one posterior age</text>
+  <text x="1230" y="603" text-anchor="middle" class="small">RADTE verifies equality after dating</text>
+</svg>
