@@ -33,6 +33,11 @@ jobs:
           path: ${{ env.R_LIBS_USER }}
           key: ${{ runner.os }}-r-${{ matrix.r-version }}-deps-${{ hashFiles('.github/workflows/radte-ci.yml') }}
 
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y libuv1-dev
+
       - name: Install R dependencies
         run: |
           Rscript -e 'dir.create(Sys.getenv("R_LIBS_USER"), recursive=TRUE, showWarnings=FALSE)'
@@ -68,6 +73,11 @@ jobs:
         with:
           path: ${{ env.R_LIBS_USER }}
           key: ${{ runner.os }}-r-${{ matrix.r-version }}-deps-${{ hashFiles('.github/workflows/radte-ci.yml') }}
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y libuv1-dev
 
       - name: Install R dependencies
         run: |
