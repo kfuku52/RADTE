@@ -1,35 +1,84 @@
-name: Tag from radte.r
+name: Create major/minor release from radte.r
 
 on:
-  workflow_dispatch:  # 手動実行
-  push:
-    branches: [main]  # main更新時でも可
+  workflow_run:
+    workflows: [RADTE ci]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
-  extract-version-and-tag:
+  create-release:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'master')
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      - name: Checkout tested commit
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
-      - name: Extract version from radte.r
-        id: extract_version
+      - name: Read and classify version
+        id: version
+        shell: bash
         run: |
-          version=$(grep "^radte_version" radte.r | sed -E "s/.*'([0-9.]+)'.*/\1/")
-          echo "version=$version" >> $GITHUB_OUTPUT
+          VERSION=$(sed -nE "s/^radte_version[[:space:]]*=[[:space:]]*'([0-9]+\.[0-9]+\.[0-9]+)'[[:space:]]*$/\1/p" radte.r)
+          if [[ ! "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "Expected one semantic radte_version assignment in radte.r, got: $VERSION"
+            exit 1
+          fi
 
-      - name: Check latest tag
-        id: check_tag
-        run: |
-          git fetch --tags
-          latest_tag=$(git tag | sort -V | tail -n 1)
-          echo "latest_tag=$latest_tag" >> $GITHUB_OUTPUT
+          SHOULD_RELEASE=false
+          if (( 10#${BASH_REMATCH[3]} == 0 )); then
+            SHOULD_RELEASE=true
+          fi
 
-      - name: Create new tag if needed
-        if: steps.extract_version.outputs.version != steps.check_tag.outputs.latest_tag
+          {
+            echo "version=$VERSION"
+            echo "tag=v$VERSION"
+            echo "should_release=$SHOULD_RELEASE"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Skip patch-only version
+        if: steps.version.outputs.should_release != 'true'
+        run: echo "${{ steps.version.outputs.version }} is a patch-only version; no tag or GitHub Release will be created."
+
+      - name: Create annotated tag
+        if: steps.version.outputs.should_release == 'true'
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
-          version=${{ steps.extract_version.outputs.version }}
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git tag "v$version"
-          git push origin "v$version"
+          EXPECTED=$(git rev-parse HEAD)
+          if git rev-parse --verify --quiet "refs/tags/$TAG" >/dev/null; then
+            ACTUAL=$(git rev-list -n 1 "$TAG")
+            if [ "$ACTUAL" != "$EXPECTED" ]; then
+              echo "Tag $TAG already points to $ACTUAL, expected $EXPECTED."
+              exit 1
+            fi
+            echo "Tag $TAG already points to the tested commit."
+          else
+            git config user.name "github-actions"
+            git config user.email "actions@github.com"
+            git tag -a "$TAG" "$EXPECTED" -m "$TAG"
+            git push origin "$TAG"
+          fi
+
+      - name: Create GitHub Release
+        if: steps.version.outputs.should_release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "GitHub Release $TAG already exists."
+          else
+            gh release create "$TAG" --verify-tag --title "$TAG" --generate-notes
+          fi

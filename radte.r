@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-radte_version = '0.3.3'
+radte_version = '0.3.4'
 
 #devtools::install_github(repo="cran/ape", ref="master")
 
