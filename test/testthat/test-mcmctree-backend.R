@@ -5,11 +5,17 @@ run_radte_mcmctree <- function(...) {
   dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
   on.exit(unlink(out_dir, recursive = TRUE))
   stderr_file <- tempfile()
-  cmd <- paste("Rscript", shQuote(radte_script), paste(..., collapse = " "), "2>", shQuote(stderr_file))
+  file.create(stderr_file)
+  args <- c(...)
   old_wd <- getwd()
   setwd(out_dir)
   on.exit(setwd(old_wd), add = TRUE)
-  exit_code <- system(cmd, ignore.stdout = TRUE)
+  exit_code <- system2(
+    "Rscript",
+    c(shQuote(radte_script), args),
+    stdout = FALSE,
+    stderr = stderr_file
+  )
   stderr_output <- paste(readLines(stderr_file, warn = FALSE), collapse = "\n")
   unlink(stderr_file)
   list(exit_code = exit_code, stderr = stderr_output)

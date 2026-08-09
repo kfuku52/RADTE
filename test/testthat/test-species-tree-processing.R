@@ -7,13 +7,18 @@ run_radte_sp <- function(...) {
   out_dir <- file.path(tempdir(), paste0("radte_sp_", as.integer(Sys.time())))
   dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
   on.exit(unlink(out_dir, recursive = TRUE))
-  args <- paste(...)
+  args <- c(...)
   stderr_file <- tempfile()
-  cmd <- paste("Rscript", shQuote(radte_script), args, "2>", shQuote(stderr_file))
+  file.create(stderr_file)
   old_wd <- getwd()
   setwd(out_dir)
   on.exit(setwd(old_wd), add = TRUE)
-  exit_code <- system(cmd, ignore.stdout = TRUE)
+  exit_code <- system2(
+    "Rscript",
+    c(shQuote(radte_script), args),
+    stdout = FALSE,
+    stderr = stderr_file
+  )
   stderr_output <- paste(readLines(stderr_file, warn = FALSE), collapse = "\n")
   unlink(stderr_file)
   list(exit_code = exit_code, stderr = stderr_output, out_dir = out_dir)

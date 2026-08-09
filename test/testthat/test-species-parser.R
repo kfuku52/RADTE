@@ -5,12 +5,17 @@ run_radte_species_parser <- function(...) {
   dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
   on.exit(unlink(out_dir, recursive = TRUE))
   stderr_file <- tempfile()
-  args <- paste(...)
-  cmd <- paste("Rscript", shQuote(radte_script), args, "2>", shQuote(stderr_file))
+  file.create(stderr_file)
+  args <- c(...)
   old_wd <- getwd()
   setwd(out_dir)
   on.exit(setwd(old_wd), add = TRUE)
-  exit_code <- system(cmd, ignore.stdout = TRUE)
+  exit_code <- system2(
+    "Rscript",
+    c(shQuote(radte_script), args),
+    stdout = FALSE,
+    stderr = stderr_file
+  )
   stderr_output <- paste(readLines(stderr_file, warn = FALSE), collapse = "\n")
   stdout_files <- list.files(out_dir, full.names = TRUE)
   output_tree <- NULL
