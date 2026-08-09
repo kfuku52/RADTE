@@ -62,8 +62,8 @@ jobs:
       - name: Install R dependencies
         run: |
           Rscript -e 'dir.create(Sys.getenv("R_LIBS_USER"), recursive=TRUE, showWarnings=FALSE)'
-          Rscript -e 'options(repos=c(CRAN=Sys.getenv("CRAN_REPO"))); pkgs <- c("ape", "testthat", "BiocManager"); missing <- pkgs[!vapply(pkgs, requireNamespace, logical(1), quietly=TRUE)]; if (length(missing)) install.packages(missing)'
-          Rscript -e 'options(repos=c(CRAN=Sys.getenv("CRAN_REPO"))); if (!requireNamespace("treeio", quietly=TRUE)) BiocManager::install("treeio", ask=FALSE, update=FALSE)'
+          Rscript -e 'options(repos=c(CRAN=Sys.getenv("CRAN_REPO")), timeout=300); pkgs <- c("ape", "testthat", "BiocManager"); for (pkg in pkgs) { for (attempt in seq_len(3)) { if (requireNamespace(pkg, quietly=TRUE)) break; install.packages(pkg) }; if (!requireNamespace(pkg, quietly=TRUE)) stop("Failed to install ", pkg, " after 3 attempts") }'
+          Rscript -e 'options(repos=c(CRAN=Sys.getenv("CRAN_REPO")), timeout=300); for (attempt in seq_len(3)) { if (requireNamespace("treeio", quietly=TRUE)) break; BiocManager::install("treeio", ask=FALSE, update=FALSE) }; if (!requireNamespace("treeio", quietly=TRUE)) stop("Failed to install treeio after 3 attempts")'
 
       - name: Run full tests
         env:
