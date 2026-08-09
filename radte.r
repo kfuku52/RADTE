@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-radte_version = '0.3.4'
+radte_version = '0.4.0'
 
 #devtools::install_github(repo="cran/ape", ref="master")
 
@@ -47,6 +47,56 @@ get_parsed_args = function(args, print=TRUE) {
         cat('\n')
     }
     return(parsed)
+}
+
+get_radte_allowed_args = function() {
+    return(c(
+        'allow_constraint_drop',
+        'chronos_attempt_timeout_sec',
+        'chronos_dual_iter_max',
+        'chronos_eval_max',
+        'chronos_high_control_fallback',
+        'chronos_iter_max',
+        'chronos_lambda',
+        'chronos_model',
+        'chronos_total_timeout_sec',
+        'dating_backend',
+        'gene_tree',
+        'generax_nhx',
+        'max_age',
+        'mcmctree_bin',
+        'mcmctree_burnin',
+        'mcmctree_clock',
+        'mcmctree_model',
+        'mcmctree_ncatG',
+        'mcmctree_nsample',
+        'mcmctree_sampfreq',
+        'mcmctree_seqfile',
+        'mcmctree_seqtype',
+        'mcmctree_usedata',
+        'mcmctree_workdir',
+        'notung_parsable',
+        'pad_short_edge',
+        'species_map_tsv',
+        'species_node_bounds_tsv',
+        'species_parser',
+        'species_regex',
+        'species_tree'
+    ))
+}
+
+validate_parsed_args = function(args, allowed_args=get_radte_allowed_args()) {
+    unknown_args = setdiff(names(args), allowed_args)
+    if (length(unknown_args) > 0) {
+        stop(
+            'Unknown argument(s): ',
+            paste(paste0('--', gsub('_', '-', unknown_args, fixed=TRUE)), collapse=', '),
+            '. Allowed arguments are: ',
+            paste(paste0('--', gsub('_', '-', sort(allowed_args), fixed=TRUE)), collapse=', '),
+            '.'
+        )
+    }
+    return(invisible(args))
 }
 
 parse_bool_arg = function(value, arg_name) {
@@ -1877,8 +1927,7 @@ run_chronos_with_restarts = function(
     max_restarts=3,
     seed_base=1,
     attempt_timeout_sec=Inf,
-    time_budget=NULL,
-    bound_attempt_by_budget=TRUE
+    time_budget=NULL
 ) {
     if (max_restarts < 1) {
         max_restarts = 1
@@ -1913,7 +1962,7 @@ run_chronos_with_restarts = function(
             break
         }
         attempt_timeout_i = attempt_timeout_sec
-        if (isTRUE(bound_attempt_by_budget) && is.finite(budget_remaining_sec)) {
+        if (is.finite(budget_remaining_sec)) {
             attempt_timeout_i = min(attempt_timeout_i, budget_remaining_sec)
         }
         if (is.finite(attempt_timeout_i) && (attempt_timeout_i <= 0)) {
@@ -2006,8 +2055,7 @@ run_chronos_retry_pipeline = function(
     max_restarts_fallback=2,
     seed_cursor=1,
     attempt_timeout_sec=Inf,
-    time_budget=NULL,
-    bound_attempt_by_budget=TRUE
+    time_budget=NULL
 ) {
     if (nrow(calibration_table) == 0) {
         return(
@@ -2078,8 +2126,7 @@ run_chronos_retry_pipeline = function(
         max_restarts=max_restarts_main,
         seed_base=seed_cursor,
         attempt_timeout_sec=attempt_timeout_sec,
-        time_budget=time_budget,
-        bound_attempt_by_budget=bound_attempt_by_budget
+        time_budget=time_budget
     )
     seed_cursor = seed_cursor + max_restarts_main
     chronos_out = main_out$chronos_out
@@ -2103,8 +2150,7 @@ run_chronos_retry_pipeline = function(
             max_restarts=max_restarts_main,
             seed_base=seed_cursor,
             attempt_timeout_sec=attempt_timeout_sec,
-            time_budget=time_budget,
-            bound_attempt_by_budget=bound_attempt_by_budget
+            time_budget=time_budget
         )
         seed_cursor = seed_cursor + max_restarts_main
         chronos_out = rescaled_out$chronos_out
@@ -2132,8 +2178,7 @@ run_chronos_retry_pipeline = function(
                 max_restarts=max_restarts_main,
                 seed_base=seed_cursor,
                 attempt_timeout_sec=attempt_timeout_sec,
-                time_budget=time_budget,
-                bound_attempt_by_budget=bound_attempt_by_budget
+                time_budget=time_budget
             )
             seed_cursor = seed_cursor + max_restarts_main
             chronos_out = expanded_out$chronos_out
@@ -2172,8 +2217,7 @@ run_chronos_retry_pipeline = function(
                     max_restarts=max_restarts_fallback,
                     seed_base=seed_cursor,
                     attempt_timeout_sec=attempt_timeout_sec,
-                    time_budget=time_budget,
-                    bound_attempt_by_budget=bound_attempt_by_budget
+                    time_budget=time_budget
                 )
                 seed_cursor = seed_cursor + max_restarts_fallback
                 chronos_out = soft_out$chronos_out
@@ -2252,8 +2296,7 @@ run_chronos_retry_pipeline = function(
                             max_restarts=max_restarts_fallback,
                             seed_base=seed_cursor,
                             attempt_timeout_sec=attempt_timeout_sec,
-                            time_budget=time_budget,
-                            bound_attempt_by_budget=bound_attempt_by_budget
+                            time_budget=time_budget
                         )
                         seed_cursor = seed_cursor + max_restarts_fallback
                         chronos_out = aggressive_out$chronos_out
@@ -3270,6 +3313,7 @@ run_mcmctree_backend = function(
 cat('arguments:\n')
 args = commandArgs(trailingOnly=TRUE)
 args = get_parsed_args(args, print=TRUE)
+validate_parsed_args(args)
 
 if (('generax_nhx' %in% names(args))&('notung_parsable' %in% names(args))) {
     stop('Only one of --notung_parsable and --generax_nhx should be specified. Exiting.\n')
@@ -3377,7 +3421,6 @@ if ('allow_constraint_drop' %in% names(args)) {
 }
 chronos_attempt_timeout_sec = 60
 chronos_total_timeout_sec = 300
-chronos_attempt_timeout_explicit = 'chronos_attempt_timeout_sec' %in% names(args)
 if (dating_backend == 'chronos') {
     if ('chronos_attempt_timeout_sec' %in% names(args)) {
         chronos_attempt_timeout_sec = parse_timeout_arg(args[['chronos_attempt_timeout_sec']], '--chronos_attempt_timeout_sec')
@@ -4066,12 +4109,6 @@ if (dating_backend == 'chronos') {
             if (control_profile_name == 'high-fallback') {
                 cat('Fast chronos control profile was exhausted; enabling high-cost fallback.\n')
             }
-            profile_attempt_timeout_sec = chronos_attempt_timeout_sec
-            if ((control_profile_name == 'fast') && (!chronos_attempt_timeout_explicit)) {
-                # The low iteration/evaluation limits already bound fast-profile
-                # work. Avoid a child-process fork for every short attempt.
-                profile_attempt_timeout_sec = Inf
-            }
             seed_cursor = 1
             for (cn in calibration_sequence) {
                 if (!("try-error" %in% class(chronos_out))) {
@@ -4107,9 +4144,8 @@ if (dating_backend == 'chronos') {
                     max_restarts_main=max_restarts_main,
                     max_restarts_fallback=max_restarts_fallback,
                     seed_cursor=seed_cursor,
-                    attempt_timeout_sec=profile_attempt_timeout_sec,
-                    time_budget=chronos_time_budget,
-                    bound_attempt_by_budget=(control_profile_name != 'fast') || chronos_attempt_timeout_explicit
+                    attempt_timeout_sec=chronos_attempt_timeout_sec,
+                    time_budget=chronos_time_budget
                 )
                 seed_cursor = stage_out$seed_cursor
                 chronos_out = stage_out$chronos_out

@@ -7,77 +7,57 @@ on:
     branches: [ master, main ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  test-fast:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    env:
-      CRAN_REPO: https://cloud.r-project.org
-      R_LIBS_USER: ${{ github.workspace }}/.r-lib/${{ matrix.r-version }}
-    strategy:
-      fail-fast: false
-      matrix:
-        r-version: ['4.4']
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up R ${{ matrix.r-version }}
-        uses: r-lib/actions/setup-r@v2
-        with:
-          r-version: ${{ matrix.r-version }}
-
-      - name: Cache R packages
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.R_LIBS_USER }}
-          key: ${{ runner.os }}-r-${{ matrix.r-version }}-deps-${{ hashFiles('.github/workflows/radte-ci.yml') }}
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y libuv1-dev
-
-      - name: Install R dependencies
-        run: |
-          Rscript -e 'dir.create(Sys.getenv("R_LIBS_USER"), recursive=TRUE, showWarnings=FALSE)'
-          Rscript -e 'options(repos=c(CRAN=Sys.getenv("CRAN_REPO"))); pkgs <- c("ape", "testthat", "BiocManager"); missing <- pkgs[!vapply(pkgs, requireNamespace, logical(1), quietly=TRUE)]; if (length(missing)) install.packages(missing)'
-          Rscript -e 'options(repos=c(CRAN=Sys.getenv("CRAN_REPO"))); if (!requireNamespace("treeio", quietly=TRUE)) BiocManager::install("treeio", ask=FALSE, update=FALSE)'
-
-      - name: Run fast tests
-        env:
-          RADTE_TEST_PROFILE: fast
-        run: Rscript test/run_tests.R
-
   test-full:
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     env:
       CRAN_REPO: https://cloud.r-project.org
       R_LIBS_USER: ${{ github.workspace }}/.r-lib/${{ matrix.r-version }}
     strategy:
       fail-fast: false
       matrix:
-        r-version: ['4.3', '4.4']
+        include:
+          - os: ubuntu-latest
+            r-version: '4.3'
+            run-paml: 'false'
+          - os: ubuntu-latest
+            r-version: '4.4'
+            run-paml: 'false'
+          - os: ubuntu-latest
+            r-version: '4.5'
+            run-paml: 'false'
+          - os: ubuntu-latest
+            r-version: '4.6'
+            run-paml: 'true'
+          - os: macos-latest
+            r-version: '4.6'
+            run-paml: 'false'
+          - os: windows-latest
+            r-version: '4.6'
+            run-paml: 'false'
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Set up R ${{ matrix.r-version }}
-        uses: r-lib/actions/setup-r@v2
+        uses: r-lib/actions/setup-r@6f6e5bc62fba3a704f74e7ad7ef7676c5c6a2590 # v2.11.4
         with:
           r-version: ${{ matrix.r-version }}
 
-      - name: Cache R packages
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.R_LIBS_USER }}
-          key: ${{ runner.os }}-r-${{ matrix.r-version }}-deps-${{ hashFiles('.github/workflows/radte-ci.yml') }}
-
       - name: Install system dependencies
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y libuv1-dev
+
+      - name: Install PAML
+        if: matrix.run-paml == 'true'
+        run: |
+          sudo apt-get install --no-install-recommends -y paml
+          command -v mcmctree
 
       - name: Install R dependencies
         run: |
@@ -88,4 +68,5 @@ jobs:
       - name: Run full tests
         env:
           RADTE_TEST_PROFILE: full
+          RADTE_RUN_PAML_TESTS: ${{ matrix.run-paml }}
         run: Rscript test/run_tests.R

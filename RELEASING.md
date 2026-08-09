@@ -4,7 +4,9 @@ Keep `radte_version` in `radte.r` on the next semantic version for every change
 merged to `master`.
 
 The `RADTE ci` workflow validates each push. After it succeeds, the release
-workflow checks the version from the exact tested commit:
+workflow checks the version from the exact tested commit. Only a successful
+`master` push from this repository can trigger a release; pull requests, fork
+runs, and manual workflow dispatches cannot publish a tag:
 
 - Versions whose patch component is nonzero (for example, `0.3.4`) remain
   available from `master`, but do not receive a Git tag or GitHub Release.

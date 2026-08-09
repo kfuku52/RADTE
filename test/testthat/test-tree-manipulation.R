@@ -417,6 +417,59 @@ test_that("run_chronos_with_restarts respects total chronos time budget", {
   expect_match(as.character(out$chronos_out), "time budget", ignore.case = TRUE)
 })
 
+test_that("run_chronos_with_restarts bounds an active attempt by the total budget", {
+  skip_if_not_installed("ape")
+  tree <- read.tree(text = "((A:1,B:1)n1:1,C:2)root;")
+  calibration <- data.frame(
+    node = as.integer(get_root_num(tree)),
+    age.min = 10,
+    age.max = 10,
+    soft.bounds = NA,
+    stringsAsFactors = FALSE
+  )
+
+  had_runner <- exists("run_chronos_once", envir = globalenv(), inherits = FALSE)
+  old_runner <- NULL
+  if (had_runner) {
+    old_runner <- get("run_chronos_once", envir = globalenv(), inherits = FALSE)
+  }
+  observed_timeout <- NA_real_
+  assign(
+    "run_chronos_once",
+    function(..., timeout_sec = Inf) {
+      observed_timeout <<- timeout_sec
+      structure("mock failure", class = "try-error")
+    },
+    envir = globalenv()
+  )
+  on.exit({
+    if (had_runner) {
+      assign("run_chronos_once", old_runner, envir = globalenv())
+    } else if (exists("run_chronos_once", envir = globalenv(), inherits = FALSE)) {
+      rm("run_chronos_once", envir = globalenv())
+    }
+  }, add = TRUE)
+
+  budget <- create_chronos_time_budget(0.5)
+  out <- run_chronos_with_restarts(
+    phy = tree,
+    calibration = calibration,
+    chronos_control = list(),
+    chronos_lambda = 1,
+    chronos_model = "discrete",
+    context_label = "test-active-budget",
+    max_restarts = 1,
+    seed_base = 1,
+    attempt_timeout_sec = Inf,
+    time_budget = budget
+  )
+
+  expect_false(out$success)
+  expect_true(is.finite(observed_timeout))
+  expect_gt(observed_timeout, 0)
+  expect_lte(observed_timeout, 0.5)
+})
+
 test_that("run_chronos_retry_pipeline skips empty calibration tables", {
   skip_if_not_installed("ape")
   tree <- read.tree(text = "((A:1,B:1)n1:1,C:2)root;")

@@ -3,7 +3,7 @@
 [![RADTE ci](https://github.com/kfuku52/RADTE/actions/workflows/radte-ci.yml/badge.svg)](https://github.com/kfuku52/RADTE/actions/workflows/radte-ci.yml)
 [![GitHub release](https://img.shields.io/github/v/tag/kfuku52/RADTE?label=release)](https://github.com/kfuku52/RADTE/releases)
 [![Bioconda](https://img.shields.io/conda/vn/bioconda/radte.svg)](https://anaconda.org/bioconda/radte)
-[![R](https://img.shields.io/badge/R-3.5%2B-blue)](https://www.r-project.org/)
+[![R](https://img.shields.io/badge/R-4.3--4.6-blue)](https://www.r-project.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 ## Overview
@@ -14,10 +14,10 @@ The divergence time of duplication nodes are estimated while constraining specia
 ![](img/radte_method.svg)
 
 ## Dependency
-* [R](https://www.r-project.org/): Started developing with 3.5 and most recently tested with 4.1.
-* [ape](http://ape-package.ird.fr/)
+* [R](https://www.r-project.org/): the CI matrix targets 4.3, 4.4, 4.5, and 4.6.
+* [ape](https://cran.r-project.org/package=ape)
 * [treeio](https://github.com/YuLab-SMU/treeio): required for `--generax_nhx`
-* [PAML / MCMCTree](http://abacus.gene.ucl.ac.uk/software/paml.html): optional, required for `--dating_backend=mcmctree`
+* [PAML / MCMCTree](https://github.com/abacus-gene/paml): optional, required for `--dating_backend=mcmctree`
 
 In addition to the above dependencies, RADTE needs an output from a phylogeny reconciliation program. 
 **NOTUNG** and **GeneRax** are supported.
@@ -25,29 +25,23 @@ In addition to the above dependencies, RADTE needs an output from a phylogeny re
 * [GeneRax](https://github.com/BenoitMorel/GeneRax)
 
 ## Installation
-### Option 1: Bioconda (recommended)
-RADTE is available on Bioconda.
+### Option 1: Source script (latest features)
+Clone the repository or download its ZIP archive from `Code -> Download ZIP`, then make the script executable.
 ```
-# Direct install into current environment
-conda install bioconda::radte
-```
-
-### Option 2: Source script (development/latest repository version)
-If you want the latest repository code, download the `radte.r` script by, for example, `git` or `svn`, and change the file permission.
-You can also download a zipped repository from `Code -> Download ZIP` above.
-```
-# With git
 git clone https://github.com/kfuku52/RADTE
 cd RADTE
-
-# With svn
-svn export https://github.com/kfuku52/RADTE/trunk/radte.r
-
-# Change permission
 chmod +x ./radte.r
 ```
 
+### Option 2: Bioconda (stable packaged release)
+RADTE is also available on Bioconda. The packaged version can lag behind the latest repository release, so check it with `conda list radte` before using recently added options.
+```
+conda install bioconda::radte
+```
+
 ## Options
+Arguments use `--key=value` syntax. Unknown or duplicated option names are rejected before input processing.
+
 #### `--species_tree`
 Species tree with estimated divergence time.
 By default, leaves (species) should be labeled as `GENUS_SPECIES` (e.g., Homo_sapiens).
@@ -68,7 +62,7 @@ Use the tree that **NOTUNG** produces because its internal nodes are correctly l
 #### `--notung_parsable`
 An output file from **NOTUNG** (tested with version 2.9) can be used to acquire the species–gene relationships in phylogeny reconciliation. See **Examples** for details.
 #### `--generax_nhx`
-Instead of the **NOTUNG** output, the NHX tree from **GeneRax** can also be used as an input. If specified, `--gene_tree` and `--notung_parsable` will be ignored. See **Examples** for details.
+Instead of the **NOTUNG** output, the NHX tree from **GeneRax** can also be used as an input. In GeneRax mode, `--gene_tree` is ignored and `--notung_parsable` must not be specified. See **Examples** for details.
 The NHX species annotation tag `S` is required for all nodes and must match species-tree node labels.
 The duplication tag `D` is optional (missing values are treated as non-duplication). Accepted duplication values are `Y`, `YES`, `TRUE`, `T`, `1`; accepted non-duplication values are `N`, `NO`, `FALSE`, `F`, `0`.
 #### `--species-parser`
@@ -126,8 +120,8 @@ Set `--allow_constraint_drop=false` to disable `S/R` drop stages and keep the ru
 #### `--chronos_attempt_timeout_sec`
 Per-attempt timeout (seconds) for each `chronos` call.  
 Use a non-negative number, or `inf`/`none`/`off` to disable per-attempt timeout.
-Default is `60` seconds for the high-cost fallback in both constraint-drop and no-drop modes.
-The bounded fast profile runs in-process by default to avoid process-launch overhead; explicitly setting this option applies the timeout to both profiles.
+Default is `60` seconds and applies to both the fast and high-cost profiles.
+Every attempt is also bounded by the remaining `--chronos_total_timeout_sec` budget.
 #### `--chronos_total_timeout_sec`
 Total timeout budget (seconds) across all `chronos` retries (RS + retry strategies + S/R if enabled).  
 Use a non-negative number, or `inf`/`none`/`off` to disable total budgeting.
@@ -228,12 +222,12 @@ In Generax, `--rec-model UndatedDTL` may not be compatible with RADTE, so please
 ![](img/generax_radte_gene_tree_output.svg)
 
 ## Example 3: transfer species-tree node age CI to gene-tree speciation nodes
-Prepare a species-node bounds file.
+The following file is included as `data/example_generax_01/species_node_bounds.tsv`.
 ```
 cat > species_node_bounds.tsv <<'EOF'
 node	age_min	age_max
 s2	8	12
-s1	28	32
+s1	110	125
 EOF
 ```
 
@@ -326,7 +320,7 @@ The root node is indicated as `S(R)` or `D(R)`.
 
 #### radte_species_tree.tsv
 This table summarizes species tree nodes. 
-When `--species_node_bounds_tsv` is used, the table also records the transferred `age_min` and `age_max` bounds alongside the branch-length point age.
+The table records `age_min` and `age_max` alongside the branch-length point age. Without `--species_node_bounds_tsv`, both bounds equal the point age.
 
 #### radte_calibrated_nodes.txt
 This file records what types of gene tree nodes are constrained in the divergence time estimation.
@@ -355,7 +349,7 @@ RADTE_TEST_PROFILE=full Rscript test/run_tests.R
 RADTE_TEST_PROFILE=fast Rscript test/run_tests.R
 
 # Optional external integration test with PAML/MCMCTree in PATH
-RADTE_RUN_PAML_TESTS=true RADTE_TEST_PROFILE=fast Rscript test/run_tests.R
+RADTE_RUN_PAML_TESTS=true RADTE_TEST_PROFILE=full Rscript test/run_tests.R
 ```
 
 ## Citation

@@ -52,6 +52,34 @@ test_that("species node bounds merge rejects intervals that exclude tree ages", 
   )
 })
 
+test_that("bundled GeneRax bounds example contains the species-tree ages", {
+  species_tree_file <- file.path(
+    project_root,
+    "data",
+    "example_generax_01",
+    "species_tree.nwk"
+  )
+  bounds_file <- file.path(
+    project_root,
+    "data",
+    "example_generax_01",
+    "species_node_bounds.tsv"
+  )
+  tree <- read.tree(species_tree_file)
+  depths <- node.depth.edgelength(tree)
+  ages <- max(depths) - depths
+  node_table <- data.frame(
+    node = c(tree$tip.label, tree$node.label),
+    age = ages,
+    age_min = ages,
+    age_max = ages,
+    stringsAsFactors = FALSE
+  )
+  bounds <- read_species_node_bounds_tsv(bounds_file)
+
+  expect_silent(merge_species_node_bounds(node_table, bounds))
+})
+
 test_that("species constraint metadata marks repeated speciation groups", {
   tree <- read.tree(text = "(((A_sp_g1:0.1,B_sp_g1:0.1)n1:0.1,(A_sp_g2:0.1,B_sp_g2:0.1)n2:0.1)d1:0.1,C_sp_g1:0.2)root;")
   n1_num <- get_node_num_by_name(tree, "n1")

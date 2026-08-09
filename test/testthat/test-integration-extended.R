@@ -228,6 +228,49 @@ test_that("RADTE calibration_all.tsv is superset of calibration_used.tsv", {
 
 # --- GeneRax detailed output validation ---
 
+test_that("RADTE GeneRax mode accepts the bundled species-node bounds example", {
+  skip_if_not(requireNamespace("treeio", quietly = TRUE), "treeio not installed")
+
+  example_dir <- file.path(project_root, "data", "example_generax_01")
+  sp_tree_file <- file.path(example_dir, "species_tree.nwk")
+  nhx_file <- file.path(example_dir, "gene_tree.nhx")
+  bounds_file <- file.path(example_dir, "species_node_bounds.tsv")
+  skip_if_not(
+    all(file.exists(c(sp_tree_file, nhx_file, bounds_file))),
+    "GeneRax bounds example data not found"
+  )
+
+  cmd <- paste(
+    "Rscript", shQuote(radte_script),
+    paste0("--species_tree=", shQuote(sp_tree_file)),
+    paste0("--generax_nhx=", shQuote(nhx_file)),
+    paste0("--species_node_bounds_tsv=", shQuote(bounds_file)),
+    "--max_age=1000", "--chronos_lambda=1", "--chronos_model=discrete",
+    "--pad_short_edge=0.001"
+  )
+
+  fixture <- run_cached_radte_fixture("generax_example_bounds", cmd)
+  expect_equal(fixture$exit_code, 0)
+
+  species_table <- read.delim(file.path(fixture$out_dir, "radte_species_tree.tsv"))
+  expect_equal(species_table$age_min[species_table$node == "s1"], 110)
+  expect_equal(species_table$age_max[species_table$node == "s1"], 125)
+  expect_equal(species_table$age_min[species_table$node == "s2"], 8)
+  expect_equal(species_table$age_max[species_table$node == "s2"], 12)
+
+  gene_table <- read.delim(file.path(fixture$out_dir, "radte_gene_tree.tsv"))
+  constrained_s1 <- gene_table$constraint_sp_node == "s1" &
+    !is.na(gene_table$constraint_sp_node)
+  constrained_s2 <- gene_table$constraint_sp_node == "s2" &
+    !is.na(gene_table$constraint_sp_node)
+  expect_true(any(constrained_s1))
+  expect_true(any(constrained_s2))
+  expect_true(all(gene_table$lower_age[constrained_s1] >= 110))
+  expect_true(all(gene_table$upper_age[constrained_s1] <= 125))
+  expect_true(all(gene_table$lower_age[constrained_s2] >= 8))
+  expect_true(all(gene_table$upper_age[constrained_s2] <= 12))
+})
+
 test_that("RADTE GeneRax mode gene tree TSV has correct structure", {
   skip_if_not(requireNamespace("treeio", quietly = TRUE), "treeio not installed")
 

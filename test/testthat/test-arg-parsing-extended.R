@@ -101,6 +101,42 @@ test_that("get_parsed_args errors when the same key is specified multiple times"
   )
 })
 
+test_that("validate_parsed_args accepts every supported CLI argument", {
+  allowed <- get_radte_allowed_args()
+  parsed <- as.list(rep("value", length(allowed)))
+  names(parsed) <- allowed
+
+  expect_invisible(validate_parsed_args(parsed))
+})
+
+test_that("CLI allowlist covers every literal args lookup in the script", {
+  source_text <- paste(readLines(radte_path, warn = FALSE), collapse = "\n")
+  matches <- regmatches(
+    source_text,
+    gregexpr("args\\[\\[['\"][A-Za-z0-9_-]+['\"]\\]\\]", source_text, perl = TRUE)
+  )[[1]]
+  referenced_args <- unique(sub(
+    "^args\\[\\[['\"]([A-Za-z0-9_-]+)['\"]\\]\\]$",
+    "\\1",
+    matches,
+    perl = TRUE
+  ))
+
+  expect_setequal(get_radte_allowed_args(), referenced_args)
+})
+
+test_that("validate_parsed_args rejects unknown arguments after normalization", {
+  parsed <- get_parsed_args(
+    c("--species-tree=sp.nwk", "--allow-constraint-dorp=false"),
+    print = FALSE
+  )
+
+  expect_error(
+    validate_parsed_args(parsed),
+    "Unknown argument.*--allow-constraint-dorp"
+  )
+})
+
 test_that("parse_bool_arg accepts common true/false representations", {
   expect_true(parse_bool_arg("true", "--x"))
   expect_true(parse_bool_arg("YES", "--x"))

@@ -19,6 +19,13 @@ run_radte <- function(...) {
   list(exit_code = exit_code, stderr = stderr_output)
 }
 
+test_that("RADTE rejects unknown CLI arguments before input processing", {
+  result <- run_radte("--allow_constraint_dorp=false")
+
+  expect_true(result$exit_code != 0)
+  expect_match(result$stderr, "Unknown argument.*--allow-constraint-dorp")
+})
+
 # --- Issue #3: Species tree with unlabeled internal nodes ---
 
 test_that("RADTE errors on species tree with unlabeled internal nodes (issue #3)", {

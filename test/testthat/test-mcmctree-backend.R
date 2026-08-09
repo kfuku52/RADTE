@@ -289,12 +289,14 @@ test_that("RADTE mcmctree backend requires seqfile", {
   expect_match(result$stderr, "mcmctree_seqfile", ignore.case = TRUE)
 })
 
-test_that("PAML 4.10.10 integration preserves bounds and verifies mirror ages", {
+test_that("PAML integration preserves bounds and verifies mirror ages", {
   run_external <- tolower(Sys.getenv("RADTE_RUN_PAML_TESTS", unset = "false")) %in%
     c("1", "true", "yes")
   skip_if_not(run_external, "Set RADTE_RUN_PAML_TESTS=true to run the external PAML test")
   mcmctree_bin <- Sys.which("mcmctree")
-  skip_if_not(nzchar(mcmctree_bin), "mcmctree is not available in PATH")
+  if (!nzchar(mcmctree_bin)) {
+    stop("RADTE_RUN_PAML_TESTS=true but mcmctree is not available in PATH")
+  }
 
   fixture_dir <- tempfile("radte_paml_fixture_")
   out_dir <- tempfile("radte_paml_output_")
