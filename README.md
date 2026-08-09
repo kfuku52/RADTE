@@ -126,11 +126,19 @@ Set `--allow_constraint_drop=false` to disable `S/R` drop stages and keep the ru
 #### `--chronos_attempt_timeout_sec`
 Per-attempt timeout (seconds) for each `chronos` call.  
 Use a non-negative number, or `inf`/`none`/`off` to disable per-attempt timeout.
-When `--allow_constraint_drop=false`, RADTE now defaults to `60` seconds to avoid infinite waits and then proceeds to no-drop fallback.
+Default is `60` seconds for the high-cost fallback in both constraint-drop and no-drop modes.
+The bounded fast profile runs in-process by default to avoid process-launch overhead; explicitly setting this option applies the timeout to both profiles.
 #### `--chronos_total_timeout_sec`
 Total timeout budget (seconds) across all `chronos` retries (RS + retry strategies + S/R if enabled).  
 Use a non-negative number, or `inf`/`none`/`off` to disable total budgeting.
-When `--allow_constraint_drop=false`, RADTE now defaults to `300` seconds.
+Default is `300` seconds. When `--allow_constraint_drop=false`, exhausting the budget proceeds to the deterministic no-drop fallback.
+#### `--chronos_iter_max`, `--chronos_eval_max`, `--chronos_dual_iter_max`
+Controls the initial fast `ape::chronos` optimization profile. Defaults are `250`, `250`, and `20`.
+RADTE tries all calibration/model/seed strategies with this bounded profile first, avoiding long waits on numerically unproductive attempts.
+#### `--chronos_high_control_fallback`
+Boolean; default is `true`.
+If every fast-profile strategy fails, RADTE retries with the historical high-cost limits (`iter.max=100000`, `eval.max=100000`, `dual.iter.max=200`) while respecting the same total timeout budget.
+Set this to `false` to disable the high-cost fallback.
 #### `--dating_backend`
 Dating engine. Supported values are `chronos` (default) and `mcmctree`.
 `chronos` uses the current `ape::chronos` workflow and supports `--allow_constraint_drop` plus the `--chronos_*` options.

@@ -84,6 +84,13 @@ test_that("get_parent_num returns correct parent for internal nodes", {
   expect_equal(get_parent_num(tree, 5), 4)
 })
 
+test_that("get_parent_map indexes every non-root node", {
+  tree <- make_test_tree()
+  parent_map <- get_parent_map(tree)
+  expect_equal(parent_map[c(1, 2, 3, 5)], c(5, 5, 4, 4))
+  expect_true(is.na(parent_map[4]))
+})
+
 test_that("get_sister_num returns correct sister for tips", {
   tree <- make_test_tree()
   # A's sister is B
@@ -118,4 +125,41 @@ test_that("get_ancestor_num returns parent for direct child of root", {
   # Ancestors of C (node 3): root (4)
   ancestors <- get_ancestor_num(tree, 3)
   expect_equal(ancestors, c(4))
+})
+
+test_that("get_ancestor_num accepts reusable navigation indexes", {
+  tree <- make_test_tree()
+  expect_equal(
+    get_ancestor_num(
+      tree,
+      1,
+      parent_map = get_parent_map(tree),
+      root_num = get_root_num(tree)
+    ),
+    c(5, 4)
+  )
+})
+
+test_that("map_gene_nodes_to_species_nodes computes species-tree MRCAs bottom-up", {
+  sp_tree <- read.tree(text = "((A_sp:1,B_sp:1)s1:1,C_sp:2)root;")
+  gn_tree <- read.tree(
+    text = "(((A_sp_g1:1,A_sp_g2:1)d1:1,B_sp_g1:2)n2:1,C_sp_g1:3)groot;"
+  )
+  parser <- build_species_parser("legacy")
+  mapped <- map_gene_nodes_to_species_nodes(
+    gn_tree,
+    sp_tree,
+    parser,
+    sp_tree$tip.label
+  )
+
+  expect_equal(mapped[get_node_num_by_name(gn_tree, "d1")], 1)
+  expect_equal(
+    mapped[get_node_num_by_name(gn_tree, "n2")],
+    get_node_num_by_name(sp_tree, "s1")
+  )
+  expect_equal(
+    mapped[get_node_num_by_name(gn_tree, "groot")],
+    get_node_num_by_name(sp_tree, "root")
+  )
 })

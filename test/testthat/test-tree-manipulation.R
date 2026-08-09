@@ -193,6 +193,32 @@ test_that("detect_chronos_failure_risks flags tight constraints and extreme edge
   expect_equal(length(risks$tight_nodes), 1)
 })
 
+test_that("make_chronos_control_profiles uses a fast profile before high fallback", {
+  profiles <- make_chronos_control_profiles()
+
+  expect_equal(names(profiles), c("fast", "high-fallback"))
+  expect_equal(profiles$fast$iter.max, 250)
+  expect_equal(profiles$fast$eval.max, 250)
+  expect_equal(profiles$fast$dual.iter.max, 20)
+  expect_equal(profiles[["high-fallback"]]$iter.max, 100000)
+  expect_equal(profiles[["high-fallback"]]$eval.max, 100000)
+  expect_equal(profiles[["high-fallback"]]$dual.iter.max, 200)
+})
+
+test_that("make_chronos_control_profiles can disable high fallback", {
+  profiles <- make_chronos_control_profiles(
+    iter_max = 500,
+    eval_max = 600,
+    dual_iter_max = 10,
+    enable_high_fallback = FALSE
+  )
+
+  expect_equal(names(profiles), "fast")
+  expect_equal(profiles$fast$iter.max, 500)
+  expect_equal(profiles$fast$eval.max, 600)
+  expect_equal(profiles$fast$dual.iter.max, 10)
+})
+
 test_that("make_soft_bounds_for_nonroot sets soft bounds only for non-root nodes", {
   calibration <- data.frame(
     node = c(10, 11, 12),

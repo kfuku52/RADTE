@@ -10,10 +10,6 @@ test_that("RADTE NOTUNG mode produces expected output files", {
   skip_if_not(all(file.exists(c(sp_tree_file, gn_tree_file, parsable_file))),
               "NOTUNG example data not found")
 
-  out_dir <- file.path(tempdir(), "radte_test_notung")
-  dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
-  on.exit(unlink(out_dir, recursive = TRUE))
-
   cmd <- paste(
     "Rscript", shQuote(radte_script),
     paste0("--species_tree=", shQuote(sp_tree_file)),
@@ -25,11 +21,9 @@ test_that("RADTE NOTUNG mode produces expected output files", {
     "--pad_short_edge=0.001"
   )
 
-  old_wd <- getwd()
-  setwd(out_dir)
-  on.exit(setwd(old_wd), add = TRUE)
-
-  exit_code <- system(cmd, ignore.stdout = TRUE, ignore.stderr = TRUE)
+  fixture <- run_cached_radte_fixture("notung_example_pad", cmd)
+  exit_code <- fixture$exit_code
+  out_dir <- fixture$out_dir
   expect_equal(exit_code, 0)
 
   # Check expected output files exist
@@ -72,10 +66,6 @@ test_that("RADTE GeneRax mode produces expected output files", {
   skip_if_not(all(file.exists(c(sp_tree_file, nhx_file))),
               "GeneRax example data not found")
 
-  out_dir <- file.path(tempdir(), "radte_test_generax")
-  dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
-  on.exit(unlink(out_dir, recursive = TRUE))
-
   cmd <- paste(
     "Rscript", shQuote(radte_script),
     paste0("--species_tree=", shQuote(sp_tree_file)),
@@ -86,11 +76,9 @@ test_that("RADTE GeneRax mode produces expected output files", {
     "--pad_short_edge=0.001"
   )
 
-  old_wd <- getwd()
-  setwd(out_dir)
-  on.exit(setwd(old_wd), add = TRUE)
-
-  exit_code <- system(cmd, ignore.stdout = TRUE, ignore.stderr = TRUE)
+  fixture <- run_cached_radte_fixture("generax_example_pad", cmd)
+  exit_code <- fixture$exit_code
+  out_dir <- fixture$out_dir
   expect_equal(exit_code, 0)
 
   # Check expected output files exist

@@ -2,6 +2,14 @@
 
 library(testthat)
 
+# Integration tests launch short-lived RADTE processes. Compiling the full
+# one-shot script costs more than it saves there, while the current test process
+# still exercises sourced functions with its normal JIT setting. Respect an
+# explicit caller setting when one is provided.
+if (Sys.getenv("R_ENABLE_JIT", unset = "") == "") {
+  Sys.setenv(R_ENABLE_JIT = "0")
+}
+
 # Determine the directory of this script
 args <- commandArgs(trailingOnly = FALSE)
 script_path <- sub("--file=", "", args[grep("--file=", args)])

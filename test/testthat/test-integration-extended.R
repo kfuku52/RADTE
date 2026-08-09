@@ -67,10 +67,6 @@ test_that("RADTE NOTUNG mode gene tree TSV has correct structure", {
   skip_if_not(all(file.exists(c(sp_tree_file, gn_tree_file, parsable_file))),
               "NOTUNG example data not found")
 
-  out_dir <- file.path(tempdir(), "radte_tsv_check")
-  dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
-  on.exit(unlink(out_dir, recursive = TRUE))
-
   cmd <- paste(
     "Rscript", shQuote(radte_script),
     paste0("--species_tree=", shQuote(sp_tree_file)),
@@ -80,11 +76,9 @@ test_that("RADTE NOTUNG mode gene tree TSV has correct structure", {
     "--pad_short_edge=0.001"
   )
 
-  old_wd <- getwd()
-  setwd(out_dir)
-  on.exit(setwd(old_wd), add = TRUE)
-
-  exit_code <- system(cmd, ignore.stdout = TRUE, ignore.stderr = TRUE)
+  fixture <- run_cached_radte_fixture("notung_example_pad", cmd)
+  exit_code <- fixture$exit_code
+  out_dir <- fixture$out_dir
   expect_equal(exit_code, 0)
 
   # Gene tree TSV validation
@@ -121,10 +115,6 @@ test_that("RADTE NOTUNG mode species tree TSV has correct structure", {
   skip_if_not(all(file.exists(c(sp_tree_file, gn_tree_file, parsable_file))),
               "NOTUNG example data not found")
 
-  out_dir <- file.path(tempdir(), "radte_sp_tsv")
-  dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
-  on.exit(unlink(out_dir, recursive = TRUE))
-
   cmd <- paste(
     "Rscript", shQuote(radte_script),
     paste0("--species_tree=", shQuote(sp_tree_file)),
@@ -134,11 +124,9 @@ test_that("RADTE NOTUNG mode species tree TSV has correct structure", {
     "--pad_short_edge=0.001"
   )
 
-  old_wd <- getwd()
-  setwd(out_dir)
-  on.exit(setwd(old_wd), add = TRUE)
-
-  exit_code <- system(cmd, ignore.stdout = TRUE, ignore.stderr = TRUE)
+  fixture <- run_cached_radte_fixture("notung_example_pad", cmd)
+  exit_code <- fixture$exit_code
+  out_dir <- fixture$out_dir
   expect_equal(exit_code, 0)
 
   # Species tree TSV validation
@@ -169,10 +157,6 @@ test_that("RADTE NOTUNG mode produces PDF output files", {
   skip_if_not(all(file.exists(c(sp_tree_file, gn_tree_file, parsable_file))),
               "NOTUNG example data not found")
 
-  out_dir <- file.path(tempdir(), "radte_pdf_check")
-  dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
-  on.exit(unlink(out_dir, recursive = TRUE))
-
   cmd <- paste(
     "Rscript", shQuote(radte_script),
     paste0("--species_tree=", shQuote(sp_tree_file)),
@@ -182,11 +166,9 @@ test_that("RADTE NOTUNG mode produces PDF output files", {
     "--pad_short_edge=0.001"
   )
 
-  old_wd <- getwd()
-  setwd(out_dir)
-  on.exit(setwd(old_wd), add = TRUE)
-
-  exit_code <- system(cmd, ignore.stdout = TRUE, ignore.stderr = TRUE)
+  fixture <- run_cached_radte_fixture("notung_example_pad", cmd)
+  exit_code <- fixture$exit_code
+  out_dir <- fixture$out_dir
   expect_equal(exit_code, 0)
 
   # PDF files should be generated
@@ -210,10 +192,6 @@ test_that("RADTE calibration_all.tsv is superset of calibration_used.tsv", {
   skip_if_not(all(file.exists(c(sp_tree_file, gn_tree_file, parsable_file))),
               "NOTUNG example data not found")
 
-  out_dir <- file.path(tempdir(), "radte_cal_check")
-  dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
-  on.exit(unlink(out_dir, recursive = TRUE))
-
   cmd <- paste(
     "Rscript", shQuote(radte_script),
     paste0("--species_tree=", shQuote(sp_tree_file)),
@@ -223,11 +201,9 @@ test_that("RADTE calibration_all.tsv is superset of calibration_used.tsv", {
     "--pad_short_edge=0.001"
   )
 
-  old_wd <- getwd()
-  setwd(out_dir)
-  on.exit(setwd(old_wd), add = TRUE)
-
-  exit_code <- system(cmd, ignore.stdout = TRUE, ignore.stderr = TRUE)
+  fixture <- run_cached_radte_fixture("notung_example_pad", cmd)
+  exit_code <- fixture$exit_code
+  out_dir <- fixture$out_dir
   expect_equal(exit_code, 0)
 
   cal_all <- read.delim(file.path(out_dir, "radte_calibration_all.tsv"))
@@ -260,10 +236,6 @@ test_that("RADTE GeneRax mode gene tree TSV has correct structure", {
   skip_if_not(all(file.exists(c(sp_tree_file, nhx_file))),
               "GeneRax example data not found")
 
-  out_dir <- file.path(tempdir(), "radte_grax_tsv")
-  dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
-  on.exit(unlink(out_dir, recursive = TRUE))
-
   cmd <- paste(
     "Rscript", shQuote(radte_script),
     paste0("--species_tree=", shQuote(sp_tree_file)),
@@ -272,11 +244,9 @@ test_that("RADTE GeneRax mode gene tree TSV has correct structure", {
     "--pad_short_edge=0.001"
   )
 
-  old_wd <- getwd()
-  setwd(out_dir)
-  on.exit(setwd(old_wd), add = TRUE)
-
-  exit_code <- system(cmd, ignore.stdout = TRUE, ignore.stderr = TRUE)
+  fixture <- run_cached_radte_fixture("generax_example_pad", cmd)
+  exit_code <- fixture$exit_code
+  out_dir <- fixture$out_dir
   expect_equal(exit_code, 0)
 
   # Gene tree TSV should exist with correct columns
@@ -402,10 +372,6 @@ test_that("RADTE output tree has all positive branch lengths", {
   skip_if_not(all(file.exists(c(sp_tree_file, gn_tree_file, parsable_file))),
               "NOTUNG example data not found")
 
-  out_dir <- file.path(tempdir(), "radte_pos_bl")
-  dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
-  on.exit(unlink(out_dir, recursive = TRUE))
-
   cmd <- paste(
     "Rscript", shQuote(radte_script),
     paste0("--species_tree=", shQuote(sp_tree_file)),
@@ -415,11 +381,9 @@ test_that("RADTE output tree has all positive branch lengths", {
     "--pad_short_edge=0.001"
   )
 
-  old_wd <- getwd()
-  setwd(out_dir)
-  on.exit(setwd(old_wd), add = TRUE)
-
-  exit_code <- system(cmd, ignore.stdout = TRUE, ignore.stderr = TRUE)
+  fixture <- run_cached_radte_fixture("notung_example_pad", cmd)
+  exit_code <- fixture$exit_code
+  out_dir <- fixture$out_dir
   expect_equal(exit_code, 0)
 
   out_tree <- read.tree(file.path(out_dir, "radte_gene_tree_output.nwk"))
