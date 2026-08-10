@@ -4,7 +4,7 @@
 # Do not edit this bundled distribution script directly.
 
 # ---- BEGIN R/version.R ----
-radte_version = '0.5.0'
+radte_version = '0.5.1'
 # ---- END R/version.R ----
 
 # ---- BEGIN R/cli.R ----

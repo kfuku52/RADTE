@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1
+
+- Install the libcurl development headers required by the quality job's R development dependencies.
+
 ## 0.5.0
 
 - Split the canonical implementation into responsibility-focused `R/` modules while retaining a generated executable `radte.r` distribution.
