@@ -259,11 +259,48 @@ test_that("MCMCTree control writer uses BDparas syntax accepted by current PAML"
   write_mcmctree_control_file(
     file = ctl_file,
     seqfile_name = "seqfile.phy",
-    treefile_name = "input.trees"
+    treefile_name = "input.trees",
+    seed = 41L
   )
 
   ctl_lines <- readLines(ctl_file)
   expect_true(any(ctl_lines == "BDparas = 1 1 0.1 M"))
+  expect_true(any(ctl_lines == "seed = 41"))
+})
+
+test_that("MCMCTree external execution honors its wall-time limit", {
+  skip_on_os("windows")
+  tree <- read.tree(text = "((A:1,B:1)n1:1,C:2)root;")
+  root_num <- get_root_num(tree)
+  calibration_table <- data.frame(
+    node = root_num,
+    age.min = 2,
+    age.max = 3,
+    soft.bounds = NA,
+    stringsAsFactors = FALSE
+  )
+  seqfile <- tempfile(fileext = ".phy")
+  fake_bin <- tempfile(pattern = "fake_mcmctree_")
+  workdir <- tempfile(pattern = "mcmctree_timeout_")
+  writeLines("3 1", seqfile)
+  writeLines(c("#!/usr/bin/env Rscript", "Sys.sleep(5)"), fake_bin)
+  Sys.chmod(fake_bin, "0755")
+  on.exit(unlink(c(seqfile, fake_bin, workdir), recursive = TRUE))
+
+  expect_error(
+    run_mcmctree_backend(
+      phy = tree,
+      gn_node_table = data.frame(),
+      calibration_table = calibration_table,
+      root_num = root_num,
+      seqfile = seqfile,
+      bin = fake_bin,
+      workdir = workdir,
+      timeout_sec = 0.1
+    ),
+    "timeout|exit code 124",
+    ignore.case = TRUE
+  )
 })
 
 test_that("RADTE mcmctree backend requires seqfile", {

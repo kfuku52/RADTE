@@ -329,13 +329,13 @@ test_that("run_chronos_with_restarts converts elapsed-time-limit errors into tim
     stringsAsFactors = FALSE
   )
 
-  had_chronos <- exists("chronos", envir = globalenv(), inherits = FALSE)
+  had_chronos <- exists("radte_chronos", envir = globalenv(), inherits = FALSE)
   old_chronos <- NULL
   if (had_chronos) {
-    old_chronos <- get("chronos", envir = globalenv(), inherits = FALSE)
+    old_chronos <- get("radte_chronos", envir = globalenv(), inherits = FALSE)
   }
   assign(
-    "chronos",
+    "radte_chronos",
     function(...) {
       stop("reached elapsed time limit")
     },
@@ -343,9 +343,9 @@ test_that("run_chronos_with_restarts converts elapsed-time-limit errors into tim
   )
   on.exit({
     if (had_chronos) {
-      assign("chronos", old_chronos, envir = globalenv())
-    } else if (exists("chronos", envir = globalenv(), inherits = FALSE)) {
-      rm("chronos", envir = globalenv())
+      assign("radte_chronos", old_chronos, envir = globalenv())
+    } else if (exists("radte_chronos", envir = globalenv(), inherits = FALSE)) {
+      rm("radte_chronos", envir = globalenv())
     }
   }, add = TRUE)
 
@@ -377,13 +377,13 @@ test_that("run_chronos_with_restarts respects total chronos time budget", {
     stringsAsFactors = FALSE
   )
 
-  had_chronos <- exists("chronos", envir = globalenv(), inherits = FALSE)
+  had_chronos <- exists("radte_chronos", envir = globalenv(), inherits = FALSE)
   old_chronos <- NULL
   if (had_chronos) {
-    old_chronos <- get("chronos", envir = globalenv(), inherits = FALSE)
+    old_chronos <- get("radte_chronos", envir = globalenv(), inherits = FALSE)
   }
   assign(
-    "chronos",
+    "radte_chronos",
     function(...) {
       stop("chronos should not run when time budget is exhausted")
     },
@@ -391,9 +391,9 @@ test_that("run_chronos_with_restarts respects total chronos time budget", {
   )
   on.exit({
     if (had_chronos) {
-      assign("chronos", old_chronos, envir = globalenv())
-    } else if (exists("chronos", envir = globalenv(), inherits = FALSE)) {
-      rm("chronos", envir = globalenv())
+      assign("radte_chronos", old_chronos, envir = globalenv())
+    } else if (exists("radte_chronos", envir = globalenv(), inherits = FALSE)) {
+      rm("radte_chronos", envir = globalenv())
     }
   }, add = TRUE)
 

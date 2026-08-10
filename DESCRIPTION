@@ -1,0 +1,23 @@
+Package: RADTE
+Type: Package
+Title: Relatively and Absolutely Dating Tree Events
+Version: 0.5.0
+Authors@R: person("Kenji", "Fukushima", role = c("aut", "cre"),
+    email = "kfuku52@gmail.com")
+Description: Infers absolute ages of gene duplication and speciation events by
+    combining reconciled gene trees with dated species trees. The repository
+    also distributes a generated, self-contained command-line script.
+License: file LICENSE
+URL: https://github.com/kfuku52/RADTE
+BugReports: https://github.com/kfuku52/RADTE/issues
+Encoding: UTF-8
+Depends: R (>= 4.3.0)
+Imports:
+    ape
+Suggests:
+    covr,
+    lintr,
+    testthat (>= 3.0.0),
+    treeio
+Config/testthat/edition: 3
+SystemRequirements: PAML (optional, for the MCMCTree backend)

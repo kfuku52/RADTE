@@ -2,26 +2,43 @@
 
 radte_script <- file.path(project_root, "radte.r")
 
-# Helper: run RADTE with given args in a temp directory, return exit code and stderr
+# These tests exercise application validation in-process. Dedicated integration
+# tests retain subprocess coverage for the generated executable.
 run_radte <- function(...) {
-  out_dir <- file.path(tempdir(), paste0("radte_val_", as.integer(Sys.time())))
-  dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
+  out_dir <- tempfile(pattern = "radte_validation_")
+  dir.create(out_dir, recursive = TRUE)
   on.exit(unlink(out_dir, recursive = TRUE))
-  args <- c(...)
-  stderr_file <- tempfile()
-  file.create(stderr_file)
+  strip_shell_quote <- function(arg) {
+    separator <- regexpr("=", arg, fixed = TRUE)[[1]]
+    if (separator < 0L) return(arg)
+    key <- substr(arg, 1L, separator)
+    value <- substr(arg, separator + 1L, nchar(arg))
+    if (nchar(value) >= 2L) {
+      first <- substr(value, 1L, 1L)
+      last <- substr(value, nchar(value), nchar(value))
+      if ((first == last) && first %in% c("'", "\"")) {
+        value <- substr(value, 2L, nchar(value) - 1L)
+      }
+    }
+    paste0(key, value)
+  }
+  args <- vapply(c(...), strip_shell_quote, character(1))
+  args <- c(args, paste0("--outdir=", out_dir), "--prefix=validation")
   old_wd <- getwd()
   setwd(out_dir)
   on.exit(setwd(old_wd), add = TRUE)
-  exit_code <- system2(
-    "Rscript",
-    c(shQuote(radte_script), args),
-    stdout = FALSE,
-    stderr = stderr_file
+  error <- NULL
+  invisible(capture.output(
+    tryCatch(
+      radte_main(args),
+      error = function(condition) error <<- condition
+    ),
+    type = "output"
+  ))
+  list(
+    exit_code = if (is.null(error)) 0L else 1L,
+    stderr = if (is.null(error)) "" else conditionMessage(error)
   )
-  stderr_output <- paste(readLines(stderr_file, warn = FALSE), collapse = "\n")
-  unlink(stderr_file)
-  list(exit_code = exit_code, stderr = stderr_output)
 }
 
 test_that("RADTE rejects unknown CLI arguments before input processing", {

@@ -2,7 +2,10 @@
 
 cran_repo <- Sys.getenv("CRAN_REPO", unset = "https://cloud.r-project.org")
 options(repos = c(CRAN = cran_repo), timeout = 300)
-dir.create(Sys.getenv("R_LIBS_USER"), recursive = TRUE, showWarnings = FALSE)
+user_library <- Sys.getenv("R_LIBS_USER", unset = "")
+if (nzchar(user_library)) {
+  dir.create(user_library, recursive = TRUE, showWarnings = FALSE)
+}
 
 install_cran_with_retry <- function(package, attempts = 3L) {
   for (attempt in seq_len(attempts)) {
@@ -16,6 +19,14 @@ install_cran_with_retry <- function(package, attempts = 3L) {
 
 for (package in c("ape", "testthat", "BiocManager")) {
   install_cran_with_retry(package)
+}
+
+install_dev <- tolower(Sys.getenv("RADTE_INSTALL_DEV", unset = "false")) %in%
+  c("1", "true", "yes")
+if (install_dev) {
+  for (package in c("covr", "lintr", "renv")) {
+    install_cran_with_retry(package)
+  }
 }
 
 # R 4.3 selects Bioconductor 3.18 and treeio 1.26.0. That treeio release

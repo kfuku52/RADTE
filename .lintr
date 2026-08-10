@@ -1,0 +1,9 @@
+linters: list(
+    semicolon_linter = semicolon_linter(),
+    trailing_whitespace_linter = trailing_whitespace_linter()
+  )
+exclusions: list(
+    "radte.r",
+    "renv"
+  )
+encoding: "UTF-8"

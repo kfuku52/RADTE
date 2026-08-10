@@ -26,11 +26,11 @@ In addition to the above dependencies, RADTE needs an output from a phylogeny re
 
 ## Installation
 ### Option 1: Source script (latest features)
-Clone the repository or download its ZIP archive from `Code -> Download ZIP`, then make the script executable.
+Clone the repository or download its ZIP archive from `Code -> Download ZIP`. The distributed script is already executable.
 ```
 git clone https://github.com/kfuku52/RADTE
 cd RADTE
-chmod +x ./radte.r
+./radte.r --version
 ```
 
 ### Option 2: Bioconda (stable packaged release)
@@ -41,6 +41,13 @@ conda install bioconda::radte
 
 ## Options
 Arguments use `--key=value` syntax. Unknown or duplicated option names are rejected before input processing.
+Run `./radte.r --help` for the generated help, or see the complete [command-line reference](docs/cli-options.md). `./radte.r --version` prints the version without loading R packages or input files.
+
+#### `--outdir`, `--prefix`
+All artifacts can be directed to one directory with `--outdir` (default: the current directory) and renamed with `--prefix` (default: `radte`). For example, `--outdir=results --prefix=family42` writes `results/family42_gene_tree_output.nwk` and the corresponding tables, plots, and manifest. RADTE creates the output directory when needed and replaces each completed artifact through a temporary file.
+
+#### `--seed`
+Base random seed for reproducible `chronos` retries and MCMCTree runs. The default is `1`. The requested and ultimately used seeds are recorded in the run manifest.
 
 #### `--species_tree`
 Species tree with estimated divergence time.
@@ -149,7 +156,9 @@ This should be an alignment file readable by **MCMCTree** whose taxon names exac
 #### `--mcmctree_bin`
 Optional path to the `mcmctree` executable. Default is `mcmctree` in `PATH`.
 #### `--mcmctree_workdir`
-Optional staging directory for the **MCMCTree** run. RADTE writes the generated tree/control files there and captures `out.txt`, `mcmc.txt`, `FigTree.tre`, and the stdout/stderr logs.
+Optional staging directory for the **MCMCTree** run. RADTE writes the generated tree/control files there and captures `out.txt`, `mcmc.txt`, `FigTree.tre`, and the stdout/stderr logs. By default each invocation receives a unique `<prefix>_mcmctree_run_<timestamp>_<pid>` directory under `--outdir`, so concurrent jobs do not share scratch files.
+#### `--mcmctree_timeout_sec`
+Wall-time limit for the external MCMCTree process. The default is unlimited. A timed-out process fails with an explicit diagnostic while preserving its isolated work directory for inspection.
 #### `--mcmctree_usedata`
 Passed to **MCMCTree** as `usedata`.
 The current RADTE integration supports only `1`.
@@ -287,7 +296,9 @@ Only one member (the `driver`) receives the calibration prior in the generated M
 The ancestral duplication in this example produces two gene-tree nodes for the same `sp_ab` species-tree event. RADTE emits the calibration prior once at the `driver` node and assigns the same mirror label to both nodes, making their estimated ages identical.
 
 ## Output files
-See `data/example_notung_01` and `data/example_generax_01` for example files.
+See `data/example_notung_01/expected` and `data/example_generax_01/expected` for illustrative reference output. Tests generate fresh artifacts in temporary directories instead of modifying these fixtures.
+
+Every filename below starts with the selected `--prefix`; `radte` is shown as the default.
 
 #### radte_gene_tree_output.nwk
 This is the main output file of RADTE. Branch lengths represent the estimated evolutionary time.
@@ -334,23 +345,24 @@ This differs from the method described in Fukushima and Pollock (2020), where du
 #### radte_mcmctree_*
 When `--dating_backend=mcmctree` is used, RADTE also copies the generated **MCMCTree** artifacts into the output directory with the prefix `radte_mcmctree_` (for example `radte_mcmctree_out.txt`, `radte_mcmctree_mcmc.txt`, `radte_mcmctree_FigTree.tre`, and the generated control/tree files).
 
+#### radte_run_manifest.tsv
+An audit record written after a successful run. It includes the RADTE, R, `ape`, and `treeio` versions; start/end timestamps; requested options; dating backend and effective parameters; requested/effective seeds; output location; MCMCTree executable/banner/work directory when applicable; and SHA-256 hashes of existing input files.
+
 ## Testing
-RADTE includes a comprehensive test suite using `testthat`. To run the tests:
+RADTE includes fast, full, external-PAML, lint, coverage, and scaling checks. The usual development commands are:
 ```
-# Install test dependencies
-Rscript -e 'install.packages(c("testthat", "ape"), repos="https://cloud.r-project.org")'
-Rscript -e 'install.packages("BiocManager", repos="https://cloud.r-project.org"); BiocManager::install("treeio")'
+RADTE_INSTALL_DEV=true Rscript test/install_dependencies.R
 
-# Run tests (default: full)
-Rscript test/run_tests.R
-
-# Explicit profiles
-RADTE_TEST_PROFILE=full Rscript test/run_tests.R
-RADTE_TEST_PROFILE=fast Rscript test/run_tests.R
-
-# Optional external integration test with PAML/MCMCTree in PATH
-RADTE_RUN_PAML_TESTS=true RADTE_TEST_PROFILE=full Rscript test/run_tests.R
+make check       # generated artifacts + lint + fast tests
+make test        # full suite
+make paml        # full suite with an installed MCMCTree executable
+make coverage    # coverage.xml and coverage-summary.txt
+make benchmark   # scaling measurements
 ```
+
+`renv.lock` captures the R 4.4 development baseline. Use it for a fully frozen local environment; the CI compatibility matrix deliberately installs compatible current dependencies independently on R 4.3–4.6. The documented `tidytree` compatibility override for R 4.3 is isolated in `test/install_dependencies.R`.
+
+The canonical source is under `R/`; `radte.r` is the generated single-file distribution required by direct downloads and Bioconda. See [CONTRIBUTING.md](CONTRIBUTING.md) and [the architecture guide](docs/architecture.md) before changing it.
 
 ## Citation
 The prototype of RADTE is described in this publication.

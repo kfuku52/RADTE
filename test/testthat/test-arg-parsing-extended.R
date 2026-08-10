@@ -1,12 +1,10 @@
 # Extended argument parsing tests
 
-test_that("get_parsed_args parses scientific notation as numeric", {
+test_that("get_parsed_args preserves scientific notation until typed coercion", {
   args <- c("--pad_short_edge=1e-6", "--lambda=1.5e2")
   result <- get_parsed_args(args, print = FALSE)
-  expect_true(is.numeric(result$pad_short_edge))
-  expect_equal(result$pad_short_edge, 1e-6)
-  expect_true(is.numeric(result$lambda))
-  expect_equal(result$lambda, 150)
+  expect_equal(result$pad_short_edge, "1e-6")
+  expect_equal(result$lambda, "1.5e2")
 })
 
 test_that("get_parsed_args handles path with special characters", {
@@ -30,24 +28,22 @@ test_that("get_parsed_args handles many arguments", {
             "--pad_short_edge=0.001")
   result <- get_parsed_args(args, print = FALSE)
   expect_equal(length(result), 7)
-  expect_equal(result$max_age, 1000)
-  expect_equal(result$chronos_lambda, 1)
+  expect_equal(result$max_age, "1000")
+  expect_equal(result$chronos_lambda, "1")
   expect_equal(result$chronos_model, "discrete")
-  expect_equal(result$pad_short_edge, 0.001)
+  expect_equal(result$pad_short_edge, "0.001")
 })
 
 test_that("get_parsed_args handles zero value", {
   args <- c("--value=0")
   result <- get_parsed_args(args, print = FALSE)
-  expect_true(is.numeric(result$value))
-  expect_equal(result$value, 0)
+  expect_equal(result$value, "0")
 })
 
 test_that("get_parsed_args handles negative numeric value", {
   args <- c("--offset=-10.5")
   result <- get_parsed_args(args, print = FALSE)
-  expect_true(is.numeric(result$offset))
-  expect_equal(result$offset, -10.5)
+  expect_equal(result$offset, "-10.5")
 })
 
 test_that("get_parsed_args returns empty list for empty input", {
@@ -59,6 +55,15 @@ test_that("get_parsed_args preserves equals signs in argument values", {
   args <- c("--gene_tree=/tmp/a=b.nwk")
   result <- get_parsed_args(args, print = FALSE)
   expect_equal(result$gene_tree, "/tmp/a=b.nwk")
+})
+
+test_that("numeric-looking paths and regular expressions remain strings", {
+  result <- get_parsed_args(
+    c("--species_tree=001", "--species_regex=123"),
+    print = FALSE
+  )
+  expect_identical(result$species_tree, "001")
+  expect_identical(result$species_regex, "123")
 })
 
 test_that("get_parsed_args normalizes hyphenated option names", {
@@ -151,7 +156,7 @@ test_that("parse_bool_arg errors on invalid boolean value", {
 
 test_that("parse_timeout_arg accepts infinite and zero timeout representations", {
   parsed <- get_parsed_args(c("--timeout=inf"), print = FALSE)
-  expect_true(is.infinite(parsed$timeout))
+  expect_identical(parsed$timeout, "inf")
   expect_true(is.infinite(parse_timeout_arg(parsed$timeout, "--timeout")))
   expect_true(is.infinite(parse_timeout_arg("inf", "--timeout")))
   expect_true(is.infinite(parse_timeout_arg("off", "--timeout")))

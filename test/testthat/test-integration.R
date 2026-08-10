@@ -137,22 +137,27 @@ test_that("RADTE NOTUNG mode handles gene tree without duplications (allS)", {
     "--max_age=1000",
     "--chronos_lambda=1",
     "--chronos_model=discrete",
-    "--pad_short_edge=0.001"
+    "--pad_short_edge=0.001",
+    paste0("--outdir=", shQuote(out_dir)),
+    "--prefix=custom",
+    "--seed=23"
   )
-
-  old_wd <- getwd()
-  setwd(out_dir)
-  on.exit(setwd(old_wd), add = TRUE)
 
   exit_code <- system(cmd, ignore.stdout = TRUE, ignore.stderr = TRUE)
   expect_equal(exit_code, 0)
 
   # Should produce allS calibrated nodes
-  cal_nodes <- readLines(file.path(out_dir, "radte_calibrated_nodes.txt"))
+  cal_nodes <- readLines(file.path(out_dir, "custom_calibrated_nodes.txt"))
   expect_equal(cal_nodes[1], "allS")
 
   # Output tree should exist and be valid
-  out_tree <- read.tree(file.path(out_dir, "radte_gene_tree_output.nwk"))
+  out_tree <- read.tree(file.path(out_dir, "custom_gene_tree_output.nwk"))
   expect_true(inherits(out_tree, "phylo"))
   expect_true(is.ultrametric(out_tree))
+
+  manifest_file <- file.path(out_dir, "custom_run_manifest.tsv")
+  expect_true(file.exists(manifest_file))
+  manifest <- read.delim(manifest_file, colClasses = "character")
+  expect_equal(manifest$value[manifest$key == "seed_requested"], "23")
+  expect_equal(manifest$value[manifest$key == "output_prefix"], "custom")
 })

@@ -1,34 +1,26 @@
 library(ape)
+library(testthat)
 
-# Locate radte.r relative to this helper file
-# test/testthat/helper-source.R -> ../../radte.r
-radte_path <- file.path(dirname(dirname(getwd())), "radte.r")
-if (!file.exists(radte_path)) {
-  # Fallback: try relative to the test directory
-  radte_path <- file.path(getwd(), "..", "..", "radte.r")
-}
-if (!file.exists(radte_path)) {
-  stop("Cannot find radte.r. Expected at: ", radte_path)
-}
-
-# Parse radte.r and evaluate only function definitions
-# This avoids executing the top-level script logic (library calls, main flow)
-exprs <- parse(radte_path)
-for (e in exprs) {
-  # Match: name = function(...) { ... }
-  if (is.call(e) && length(e) >= 3) {
-    op <- as.character(e[[1]])
-    if (op %in% c("=", "<-")) {
-      rhs <- e[[3]]
-      if (is.call(rhs) && as.character(rhs[[1]]) == "function") {
-        eval(e, envir = globalenv())
-      }
+find_radte_project_root <- function(start = getwd()) {
+  current <- normalizePath(start, mustWork = TRUE)
+  repeat {
+    if (file.exists(file.path(current, "R", "load.R"))) {
+      return(current)
     }
+    parent <- dirname(current)
+    if (identical(parent, current)) {
+      stop("Cannot find the RADTE project root from: ", start)
+    }
+    current <- parent
   }
 }
 
-# Project root for accessing test data
-project_root <- normalizePath(dirname(radte_path))
+project_root <- find_radte_project_root()
+radte_path <- file.path(project_root, "radte.r")
+source(file.path(project_root, "R", "load.R"), local = globalenv())
+if (!identical(Sys.getenv("RADTE_COVERAGE"), "true")) {
+  radte_source_modules(project_root, envir = globalenv())
+}
 
 # End-to-end examples are relatively expensive and several integration tests
 # inspect different artifacts from the same immutable run. Cache successful CLI

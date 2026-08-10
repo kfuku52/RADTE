@@ -1,10 +1,13 @@
 # Releasing RADTE
 
-Keep `radte_version` in `radte.r` on the next semantic version for every change
-merged to `master`.
+Keep `radte_version` in `R/version.R` on the next semantic version for every
+change merged to `master`, and keep the `DESCRIPTION` version identical. Run
+`make build`, `make cli-docs`, and `Rscript tools/check_version.R` before the
+change is merged. Never edit the generated `radte.r` version directly.
 
 The `RADTE ci` workflow validates each push. After it succeeds, the release
-workflow checks the version from the exact tested commit. Only a successful
+workflow checks `R/version.R` from the exact tested commit. Pull-request CI
+also verifies that the version increased relative to its base branch. Only a successful
 `master` push from this repository can trigger a release; pull requests, fork
 runs, and manual workflow dispatches cannot publish a tag:
 

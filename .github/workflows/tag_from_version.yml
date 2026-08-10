@@ -1,4 +1,4 @@
-name: Create major/minor release from radte.r
+name: Create major/minor release from RADTE version
 
 on:
   workflow_run:
@@ -28,9 +28,9 @@ jobs:
         id: version
         shell: bash
         run: |
-          VERSION=$(sed -nE "s/^radte_version[[:space:]]*=[[:space:]]*'([0-9]+\.[0-9]+\.[0-9]+)'[[:space:]]*$/\1/p" radte.r)
+          VERSION=$(sed -nE "s/^radte_version[[:space:]]*=[[:space:]]*'([0-9]+\.[0-9]+\.[0-9]+)'[[:space:]]*$/\1/p" R/version.R)
           if [[ ! "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
-            echo "Expected one semantic radte_version assignment in radte.r, got: $VERSION"
+            echo "Expected one semantic radte_version assignment in R/version.R, got: $VERSION"
             exit 1
           fi
 

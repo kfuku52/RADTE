@@ -1,0 +1,5 @@
+^renv$
+^renv\.lock$
+^\.github$
+^\.lintr$
+^data$
