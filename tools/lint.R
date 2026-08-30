@@ -4,7 +4,7 @@ if (!requireNamespace("lintr", quietly = TRUE)) {
   stop("Install the development dependency 'lintr' before running this check.")
 }
 
-paths <- c("R", "test", "tools", "benchmark")
+paths <- c("R", "test", "tests", "tools", "benchmark")
 lints <- unlist(lapply(paths, function(path) lintr::lint_dir(path)), recursive = FALSE)
 if (length(lints) > 0L) {
   print(lints)

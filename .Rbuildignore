@@ -3,3 +3,5 @@
 ^\.github$
 ^\.lintr$
 ^data$
+^coverage\.xml$
+^coverage-summary\.txt$

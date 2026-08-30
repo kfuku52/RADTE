@@ -21,7 +21,7 @@ run_radte_mcmctree <- function(...) {
   list(exit_code = exit_code, stderr = stderr_output)
 }
 
-test_that("MCMCTree calibration text widens fixed ages into hard bounds", {
+test_that("MCMCTree calibration text widens fixed ages into narrow PAML prior intervals", {
   txt <- make_mcmctree_calibration_text(10, 10)
   expect_match(txt, "^B\\{")
   expect_false(grepl("B\\{10, 10\\}", txt))

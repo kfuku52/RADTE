@@ -14,9 +14,7 @@ test_files <- test_files[!basename(test_files) %in% c(
   "test-integration-extended.R",
   "test-manual-calculations.R",
   "test-species-tree-processing.R",
-  "test-performance-scaling.R",
-  # This file relies on testthat binding mocks that covr instrumentation wraps.
-  "test-tree-manipulation.R"
+  "test-performance-scaling.R"
 )]
 
 old_coverage <- Sys.getenv("RADTE_COVERAGE", unset = NA_character_)

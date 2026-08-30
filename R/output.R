@@ -49,7 +49,8 @@ atomic_write_file = function(file, writer) {
         stop('Atomic writer did not create its temporary output: ', tmp_file)
     }
     backup_file = NULL
-    if (file.exists(file)) {
+    if (dir.exists(file)) stop('Output path is an existing directory: ', file)
+    if (file.exists(file) || (!is.na(Sys.readlink(file)) && nzchar(Sys.readlink(file)))) {
         backup_file = tempfile(pattern=paste0('.', basename(file), '-backup-'), tmpdir=parent_dir)
         if (!file.rename(file, backup_file)) {
             stop('Failed to stage the existing output for atomic replacement: ', file)
@@ -135,4 +136,90 @@ write_run_manifest = function(entries, file) {
         stringsAsFactors=FALSE
     )
     atomic_write_table(manifest, file=file, sep='\t', quote=FALSE, row.names=FALSE, na='')
+}
+
+radte_output_suffixes = function() {
+    c('_calibrated_nodes.txt', '_gene_tree_output.nwk', '_calibration_used.tsv',
+      '_calibration_all.tsv', '_gene_tree.tsv', '_species_tree.tsv',
+      '_shared_speciation_ages.tsv', '_gene_tree_input.pdf', '_gene_tree_output.pdf',
+      '_species_tree.pdf', '_run_manifest.tsv',
+      paste0('_mcmctree_', c('mcmctree.ctl', 'input.trees', 'out.txt', 'mcmc.txt',
+                            'FigTree.tre', 'mcmctree.stdout.log', 'mcmctree.stderr.log')))
+}
+
+begin_output_transaction = function(outdir, prefix, inputs=character()) {
+    transaction = new.env(parent=emptyenv())
+    transaction$outdir = outdir
+    transaction$prefix = prefix
+    transaction$inputs = inputs
+    transaction$input_hashes = vapply(inputs, compute_file_sha256, character(1))
+    transaction$targets = file.path(outdir, paste0(prefix, radte_output_suffixes()))
+    assert_no_input_output_collision(inputs, transaction$targets)
+    if (any(dir.exists(transaction$targets))) stop('Output path is an existing directory.')
+    transaction$lock = file.path(outdir, paste0('.', prefix, '.radte-lock'))
+    if (!dir.create(transaction$lock, showWarnings=FALSE)) {
+        stop('Another run owns this output prefix, or a stale lock exists: ', transaction$lock)
+    }
+    transaction$stage = tempfile(pattern=paste0('.', prefix, '-run-'), tmpdir=outdir)
+    if (!dir.create(transaction$stage)) {
+        unlink(transaction$lock, recursive=TRUE)
+        stop('Could not create output staging directory.')
+    }
+    transaction$run_id = basename(transaction$stage)
+    transaction$preserve = FALSE
+    writeLines(c(paste0('pid=', Sys.getpid()), paste0('run_id=', transaction$run_id)),
+               file.path(transaction$lock, 'owner.txt'))
+    transaction
+}
+
+cleanup_output_transaction = function(transaction) {
+    if (!isTRUE(transaction$preserve)) unlink(transaction$stage, recursive=TRUE)
+    unlink(transaction$lock, recursive=TRUE)
+    invisible(NULL)
+}
+
+commit_output_transaction = function(transaction, manifest_name) {
+    sources = list.files(transaction$stage, full.names=TRUE)
+    sources = c(sources[basename(sources) != manifest_name], file.path(transaction$stage, manifest_name))
+    if (!all(file.exists(sources))) stop('Output manifest or staged artifact is missing.')
+    targets = file.path(transaction$outdir, basename(sources))
+    if (!all(targets %in% transaction$targets)) stop('Unexpected output filename in staging directory.')
+    assert_no_input_output_collision(transaction$inputs, transaction$targets)
+    current_hashes = vapply(transaction$inputs, compute_file_sha256, character(1))
+    if (!identical(current_hashes, transaction$input_hashes)) stop('Input files changed during the run; outputs were not published.')
+    backup_dir = file.path(transaction$stage, '.backup')
+    dir.create(backup_dir)
+    backed_up = character()
+    published = character()
+    complete = FALSE
+    on.exit({
+        if (!complete) {
+            unlink(published)
+            restored = vapply(backed_up, function(target) {
+                file.rename(file.path(backup_dir, basename(target)), target)
+            }, logical(1))
+            if (!all(restored)) {
+                transaction$preserve = TRUE
+                warning('Output rollback was incomplete; recover previous artifacts from: ', backup_dir)
+            }
+        }
+    }, add=TRUE)
+    # Preserve the previous complete generation until every writer (including
+    # PDF generation) succeeds. Manifest is always the final published file.
+    suspendInterrupts({
+        for (target in transaction$targets) {
+            if (file.exists(target) || (!is.na(Sys.readlink(target)) && nzchar(Sys.readlink(target)))) {
+                if (dir.exists(target) || !file.rename(target, file.path(backup_dir, basename(target)))) {
+                    stop('Could not back up output: ', target)
+                }
+                backed_up = c(backed_up, target)
+            }
+        }
+        for (i in seq_along(sources)) {
+            if (!file.rename(sources[[i]], targets[[i]])) stop('Could not publish output: ', targets[[i]])
+            published = c(published, targets[[i]])
+        }
+        complete = TRUE
+    })
+    invisible(targets)
 }

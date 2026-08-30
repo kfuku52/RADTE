@@ -8,26 +8,30 @@ format_mcmctree_number = function(value) {
     return(txt)
 }
 
-stage_external_input_file = function(source, staged_file) {
-    if (!is_nonempty_scalar_string(source)) {
-        stop('External input file path should be a non-empty string.')
-    }
-    source = as.character(source)
-    if (!file.exists(source)) {
-        stop('External input file was not found: ', source)
-    }
-    if (file.exists(staged_file) || file.exists(Sys.readlink(staged_file))) {
-        unlink(staged_file)
-    }
-    source_abs = normalizePath(source, mustWork=TRUE)
-    linked = suppressWarnings(file.symlink(source_abs, staged_file))
-    if (!isTRUE(linked)) {
-        copied = file.copy(source_abs, staged_file, overwrite=TRUE)
-        if (!isTRUE(copied)) {
-            stop('Failed to stage external input file: ', source)
+assert_no_input_output_collision = function(inputs, outputs) {
+    inputs = inputs[file.exists(inputs)]
+    resolved_inputs = vapply(inputs, normalizePath, character(1), mustWork=TRUE)
+    existing = outputs[file.exists(outputs)]
+    if (length(existing)) {
+        resolved_outputs = vapply(existing, normalizePath, character(1), mustWork=TRUE)
+        collisions = existing[resolved_outputs %in% resolved_inputs]
+        if (length(collisions)) {
+            stop('Input/output path collision; refusing to overwrite input: ', paste(collisions, collapse=', '))
         }
     }
-    return(invisible(staged_file))
+    invisible(TRUE)
+}
+
+stage_external_input_file = function(source, staged_file) {
+    if (!is_nonempty_scalar_string(source) || !file.exists(source) || dir.exists(source)) {
+        stop('External input file was not found: ', source)
+    }
+    source_abs = normalizePath(source, mustWork=TRUE)
+    assert_no_input_output_collision(source_abs, staged_file)
+    # Copy a snapshot: the external program must never write through a link to
+    # the original alignment. Atomic replacement also handles dangling links.
+    atomic_copy_file(source_abs, staged_file)
+    invisible(staged_file)
 }
 
 make_mcmctree_calibration_text = function(age_min, age_max, exact_ratio=1e-6, exact_min=1e-8) {
@@ -42,7 +46,7 @@ make_mcmctree_calibration_text = function(age_min, age_max, exact_ratio=1e-6, ex
         if (age_max_num < age_min_num) {
             stop('MCMCTree calibration upper bound is younger than lower bound.')
         }
-        if (isTRUE(all.equal(age_min_num, age_max_num))) {
+        if (age_min_num == age_max_num) {
             eps = max(exact_min, abs(age_max_num) * exact_ratio)
             age_min_num = max(0, age_min_num - eps)
             age_max_num = age_max_num + eps
@@ -75,7 +79,7 @@ make_mcmctree_root_calibration_text = function(age_min, age_max, exact_ratio=1e-
         if (age_max_num < age_min_num) {
             stop('MCMCTree root calibration upper bound is younger than lower bound.')
         }
-        if (isTRUE(all.equal(age_min_num, age_max_num))) {
+        if (age_min_num == age_max_num) {
             eps = max(exact_min, abs(age_max_num) * exact_ratio)
             age_min_num = max(0, age_min_num - eps)
             age_max_num = age_max_num + eps
@@ -395,28 +399,45 @@ build_mcmctree_tree_text = function(phy, gn_node_table, calibration_table, root_
     annotation_info = build_mcmctree_annotation_map(phy, gn_node_table, calibration_table, root_num)
     annotation_map = annotation_info$annotation_map
 
-    build_subtree = function(node_num) {
-        if (node_num <= ape::Ntip(phy)) {
-            return(phy$tip.label[[node_num]])
+    total = length(phy$tip.label) + phy$Nnode
+    annotations = unname(annotation_map[as.character(seq_len(total))])
+    children = split(phy$edge[, 2], factor(phy$edge[, 1], levels=seq_len(total)))
+    stack = integer(total * 3L)
+    stack[[1]] = root_num
+    top = 1L
+    tokens = character(total * 3L)
+    count = 0L
+    while (top > 0L) {
+        node = stack[[top]]
+        top = top - 1L
+        count = count + 1L
+        if (node == 0L) {
+            tokens[[count]] = ','
+        } else if (node < 0L) {
+            annotation = annotations[[-node]]
+            if (is.null(annotation) || is.na(annotation)) annotation = ''
+            tokens[[count]] = paste0(')', annotation)
+        } else if (node <= length(phy$tip.label)) {
+            tokens[[count]] = phy$tip.label[[node]]
+        } else {
+            tokens[[count]] = '('
+            top = top + 1L
+            stack[[top]] = -node
+            child_nodes = children[[node]]
+            for (i in rev(seq_along(child_nodes))) {
+                top = top + 1L
+                stack[[top]] = child_nodes[[i]]
+                if (i > 1L) {
+                    top = top + 1L
+                    stack[[top]] = 0L
+                }
+            }
         }
-        child_nodes = phy$edge[phy$edge[,1] == node_num, 2]
-        child_text = vapply(child_nodes, build_subtree, character(1))
-        node_text = paste0('(', paste(child_text, collapse=','), ')')
-        annotation_text = annotation_map[[as.character(node_num)]]
-        if (is.null(annotation_text) || is.na(annotation_text)) {
-            annotation_text = ''
-        }
-        return(paste0(node_text, annotation_text))
     }
+    list(tree_text=paste0(paste0(tokens[seq_len(count)], collapse=''), ';'),
+         duplication_flag=annotation_info$duplication_flag,
+         mirror_table=annotation_info$mirror_table)
 
-    root_text = build_subtree(root_num)
-    return(
-        list(
-            tree_text=paste0(root_text, ';'),
-            duplication_flag=annotation_info$duplication_flag,
-            mirror_table=annotation_info$mirror_table
-        )
-    )
 }
 
 write_mcmctree_tree_file = function(file, phy, gn_node_table, calibration_table, root_num) {
@@ -688,7 +709,8 @@ run_mcmctree_backend = function(
     nsample=20000,
     ncatG=5,
     seed=1L,
-    timeout_sec=Inf
+    timeout_sec=Inf,
+    protected_inputs=character()
 ) {
     if (!is_nonempty_scalar_string(seqfile)) {
         stop('--mcmctree_seqfile is required when --dating_backend=mcmctree.')
@@ -700,9 +722,14 @@ run_mcmctree_backend = function(
     if (!file.exists(bin_path)) {
         bin_path = Sys.which(bin_path)
     }
-    if ((!is_nonempty_scalar_string(bin_path)) || (!file.exists(bin_path))) {
+    if ((!is_nonempty_scalar_string(bin_path)) || (!file.exists(bin_path)) || dir.exists(bin_path)) {
         stop('MCMCTree executable was not found: ', bin)
     }
+
+    bin_path = normalizePath(bin_path, mustWork=TRUE)
+    if (file.access(bin_path, 1L) != 0L) stop('MCMCTree executable is not executable: ', bin_path)
+    seqfile = normalizePath(seqfile, mustWork=TRUE)
+    tree_info = build_mcmctree_tree_text(phy, gn_node_table, calibration_table, root_num)
 
     dir.create(workdir, recursive=TRUE, showWarnings=FALSE)
     workdir_abs = normalizePath(workdir, mustWork=TRUE)
@@ -711,22 +738,18 @@ run_mcmctree_backend = function(
         'FigTree.tre', 'mcmctree.stdout.log', 'mcmctree.stderr.log'
     )
     known_output_paths = file.path(workdir_abs, known_outputs)
-    existing_outputs = known_output_paths[file.exists(known_output_paths) | nzchar(Sys.readlink(known_output_paths))]
-    if (length(existing_outputs) > 0) {
-        unlink(existing_outputs)
-    }
-    seqfile_staged = file.path(workdir_abs, 'seqfile.phy')
-    treefile_staged = file.path(workdir_abs, 'input.trees')
-    ctlfile_staged = file.path(workdir_abs, 'mcmctree.ctl')
+    assert_no_input_output_collision(c(seqfile, bin_path, protected_inputs), known_output_paths)
+    if (any(dir.exists(known_output_paths))) stop('MCMCTree output path is an existing directory.')
+    existing_outputs = known_output_paths[file.exists(known_output_paths) | (!is.na(Sys.readlink(known_output_paths)) & nzchar(Sys.readlink(known_output_paths)))]
+    staging_dir = tempfile(pattern='.mcmctree-inputs-', tmpdir=dirname(workdir_abs))
+    dir.create(staging_dir)
+    on.exit(unlink(staging_dir, recursive=TRUE), add=TRUE)
+    seqfile_staged = file.path(staging_dir, 'seqfile.phy')
+    treefile_staged = file.path(staging_dir, 'input.trees')
+    ctlfile_staged = file.path(staging_dir, 'mcmctree.ctl')
 
     stage_external_input_file(seqfile, seqfile_staged)
-    tree_info = write_mcmctree_tree_file(
-        file=treefile_staged,
-        phy=phy,
-        gn_node_table=gn_node_table,
-        calibration_table=calibration_table,
-        root_num=root_num
-    )
+    writeLines(c(paste(ape::Ntip(phy), 1), tree_info$tree_text), treefile_staged)
     write_mcmctree_control_file(
         file=ctlfile_staged,
         seqfile_name=basename(seqfile_staged),
@@ -742,6 +765,13 @@ run_mcmctree_backend = function(
         seed=seed,
         duplication_flag=tree_info$duplication_flag
     )
+
+    if (length(existing_outputs) > 0) {
+        unlink(existing_outputs)
+    }
+    for (input in c(seqfile_staged, treefile_staged, ctlfile_staged)) {
+        if (!file.rename(input, file.path(workdir_abs, basename(input)))) stop('Could not stage MCMCTree input: ', input)
+    }
 
     old_wd = getwd()
     on.exit(setwd(old_wd), add=TRUE)
@@ -789,7 +819,8 @@ run_mcmctree_backend = function(
     if (is.null(posterior_tree$node.label) || (length(posterior_tree$node.label) != posterior_tree$Nnode)) {
         posterior_tree$node.label = paste0('mcmctree_node_', seq_len(posterior_tree$Nnode))
     }
-    posterior_tree = transfer_node_labels(phy_from=phy, phy_to=posterior_tree)
+    validate_dated_tree(posterior_tree, phy, tolerance=1e-5)
+    posterior_tree = transfer_dated_ages(phy, posterior_tree, tolerance=1e-5)
     shared_speciation_ages = summarize_shared_speciation_ages(
         phy=posterior_tree,
         gn_node_table=gn_node_table,

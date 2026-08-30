@@ -89,17 +89,10 @@ if (test_profile == "full") {
   if (length(test_files) == 0) {
     stop("No tests selected for fast profile.")
   }
-  failed_count <- 0
-  error_count <- 0
-  for (test_file_path in test_files) {
-    file_result <- test_file(
-      test_file_path,
-      reporter = "summary"
-    )
-    failed_count <- failed_count + count_result_col(file_result, "failed")
-    error_count <- error_count + count_result_col(file_result, "error")
-  }
-  exit_if_fail_count_nonzero(failed_count, error_count)
+  selected <- sub("^test-(.*)\\.R$", "\\1", basename(test_files))
+  results <- test_dir(test_dir_path, filter = paste0("^(", paste(selected, collapse = "|"), ")$"),
+                      reporter = "summary")
+  exit_if_test_failures(results)
 } else {
   stop("Unsupported RADTE_TEST_PROFILE: ", test_profile)
 }

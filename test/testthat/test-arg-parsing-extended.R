@@ -114,20 +114,20 @@ test_that("validate_parsed_args accepts every supported CLI argument", {
   expect_invisible(validate_parsed_args(parsed))
 })
 
-test_that("CLI allowlist covers every literal args lookup in the script", {
-  source_text <- paste(readLines(radte_path, warn = FALSE), collapse = "\n")
-  matches <- regmatches(
-    source_text,
-    gregexpr("args\\[\\[['\"][A-Za-z0-9_-]+['\"]\\]\\]", source_text, perl = TRUE)
-  )[[1]]
-  referenced_args <- unique(sub(
-    "^args\\[\\[['\"]([A-Za-z0-9_-]+)['\"]\\]\\]$",
-    "\\1",
-    matches,
-    perl = TRUE
-  ))
-
-  expect_setequal(get_radte_allowed_args(), referenced_args)
+test_that("schema defaults and every supplied option pass through configuration resolution", {
+  supplied <- list(species_tree = "sp", gene_tree = "gene", notung_parsable = "events",
+                   max_age = 100, chronos_lambda = 1, chronos_model = "discrete")
+  resolved <- resolve_radte_config(supplied)
+  schema <- get_radte_option_schema()
+  for (name in names(schema)) {
+    if (!is.null(schema[[name]]$default) && !name %in% names(supplied)) {
+      expect_equal(resolved[[name]], schema[[name]]$default)
+    }
+  }
+  expect_true(all(names(resolved) %in% get_radte_allowed_args()))
+  expect_error(resolve_radte_config(modifyList(supplied, list(chronos_lambda = -1))), "non-negative")
+  expect_error(parse_integer_arg("2147483648", "--seed"), "integer")
+  expect_identical(radte_attempt_seed(.Machine$integer.max, 1L), 1L)
 })
 
 test_that("validate_parsed_args rejects unknown arguments after normalization", {

@@ -5,6 +5,7 @@ options(repos = c(CRAN = cran_repo), timeout = 300)
 user_library <- Sys.getenv("R_LIBS_USER", unset = "")
 if (nzchar(user_library)) {
   dir.create(user_library, recursive = TRUE, showWarnings = FALSE)
+  .libPaths(c(user_library, .libPaths()))
 }
 
 install_cran_with_retry <- function(package, attempts = 3L) {
@@ -12,7 +13,10 @@ install_cran_with_retry <- function(package, attempts = 3L) {
     if (requireNamespace(package, quietly = TRUE)) {
       return(invisible(TRUE))
     }
-    try(install.packages(package), silent = FALSE)
+    try(install.packages(package, lib = .libPaths()[[1]]), silent = FALSE)
+    if (requireNamespace(package, quietly = TRUE)) {
+      return(invisible(TRUE))
+    }
   }
   stop("Failed to install ", package, " after ", attempts, " attempts")
 }

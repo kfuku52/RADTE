@@ -149,7 +149,7 @@ test_that("find_descendant_constraint_conflicts detects same-age descendant cons
   expect_equal(conflicts$node[1], node_map[["n1"]])
 })
 
-test_that("stabilize_descendant_constraints keeps nodes and makes descendant younger than ancestor", {
+test_that("stabilize_descendant_constraints rejects impossible bounds without changing them", {
   tree <- read.tree(text = "(((A:0.1,B:0.1)n1:0.1,C:0.2)n2:0.3,D:0.5)root;")
   root_num <- get_root_num(tree)
   node_map <- setNames((length(tree$tip.label) + 1):(length(tree$tip.label) + tree$Nnode), tree$node.label)
@@ -163,15 +163,9 @@ test_that("stabilize_descendant_constraints keeps nodes and makes descendant you
     stringsAsFactors = FALSE
   )
 
-  stabilized <- stabilize_descendant_constraints(gn_node_table, tree, root_num)
-  out_table <- stabilized$gn_node_table
-  n1_row <- out_table[out_table$gn_node_num == node_map[["n1"]], ]
-  n2_row <- out_table[out_table$gn_node_num == node_map[["n2"]], ]
-
-  expect_equal(nrow(out_table), nrow(gn_node_table))
-  expect_lt(n1_row$upper_age, n2_row$upper_age)
-  expect_lt(n1_row$lower_age, n1_row$upper_age)
-  expect_gt(nrow(stabilized$adjusted_nodes), 0)
+  original <- gn_node_table
+  expect_error(stabilize_descendant_constraints(gn_node_table, tree, root_num), "temporally infeasible")
+  expect_identical(gn_node_table, original)
 })
 
 test_that("detect_chronos_failure_risks flags tight constraints and extreme edge ranges", {
@@ -219,18 +213,6 @@ test_that("make_chronos_control_profiles can disable high fallback", {
   expect_equal(profiles$fast$dual.iter.max, 10)
 })
 
-test_that("make_soft_bounds_for_nonroot sets soft bounds only for non-root nodes", {
-  calibration <- data.frame(
-    node = c(10, 11, 12),
-    age.min = c(100, 60, 30),
-    age.max = c(100, 61, 31),
-    soft.bounds = NA,
-    stringsAsFactors = FALSE
-  )
-  out <- make_soft_bounds_for_nonroot(calibration, root_num = 10)
-  expect_true(is.na(out$soft.bounds[out$node == 10]))
-  expect_true(all(out$soft.bounds[out$node != 10]))
-})
 
 test_that("validate_duplication_nodes_internal returns invisibly when no duplication rows exist", {
   tree <- read.tree(text = "((A:1,B:1)n1:1,C:2)root;")
@@ -329,23 +311,23 @@ test_that("run_chronos_with_restarts converts elapsed-time-limit errors into tim
     stringsAsFactors = FALSE
   )
 
-  had_chronos <- exists("radte_chronos", envir = globalenv(), inherits = FALSE)
+  had_chronos <- exists("radte_chronos", envir = environment(run_chronos_with_restarts), inherits = FALSE)
   old_chronos <- NULL
   if (had_chronos) {
-    old_chronos <- get("radte_chronos", envir = globalenv(), inherits = FALSE)
+    old_chronos <- get("radte_chronos", envir = environment(run_chronos_with_restarts), inherits = FALSE)
   }
   assign(
     "radte_chronos",
     function(...) {
       stop("reached elapsed time limit")
     },
-    envir = globalenv()
+    envir = environment(run_chronos_with_restarts)
   )
   on.exit({
     if (had_chronos) {
-      assign("radte_chronos", old_chronos, envir = globalenv())
-    } else if (exists("radte_chronos", envir = globalenv(), inherits = FALSE)) {
-      rm("radte_chronos", envir = globalenv())
+      assign("radte_chronos", old_chronos, envir = environment(run_chronos_with_restarts))
+    } else if (exists("radte_chronos", envir = environment(run_chronos_with_restarts), inherits = FALSE)) {
+      rm("radte_chronos", envir = environment(run_chronos_with_restarts))
     }
   }, add = TRUE)
 
@@ -377,23 +359,23 @@ test_that("run_chronos_with_restarts respects total chronos time budget", {
     stringsAsFactors = FALSE
   )
 
-  had_chronos <- exists("radte_chronos", envir = globalenv(), inherits = FALSE)
+  had_chronos <- exists("radte_chronos", envir = environment(run_chronos_with_restarts), inherits = FALSE)
   old_chronos <- NULL
   if (had_chronos) {
-    old_chronos <- get("radte_chronos", envir = globalenv(), inherits = FALSE)
+    old_chronos <- get("radte_chronos", envir = environment(run_chronos_with_restarts), inherits = FALSE)
   }
   assign(
     "radte_chronos",
     function(...) {
       stop("chronos should not run when time budget is exhausted")
     },
-    envir = globalenv()
+    envir = environment(run_chronos_with_restarts)
   )
   on.exit({
     if (had_chronos) {
-      assign("radte_chronos", old_chronos, envir = globalenv())
-    } else if (exists("radte_chronos", envir = globalenv(), inherits = FALSE)) {
-      rm("radte_chronos", envir = globalenv())
+      assign("radte_chronos", old_chronos, envir = environment(run_chronos_with_restarts))
+    } else if (exists("radte_chronos", envir = environment(run_chronos_with_restarts), inherits = FALSE)) {
+      rm("radte_chronos", envir = environment(run_chronos_with_restarts))
     }
   }, add = TRUE)
 
@@ -428,10 +410,10 @@ test_that("run_chronos_with_restarts bounds an active attempt by the total budge
     stringsAsFactors = FALSE
   )
 
-  had_runner <- exists("run_chronos_once", envir = globalenv(), inherits = FALSE)
+  had_runner <- exists("run_chronos_once", envir = environment(run_chronos_with_restarts), inherits = FALSE)
   old_runner <- NULL
   if (had_runner) {
-    old_runner <- get("run_chronos_once", envir = globalenv(), inherits = FALSE)
+    old_runner <- get("run_chronos_once", envir = environment(run_chronos_with_restarts), inherits = FALSE)
   }
   observed_timeout <- NA_real_
   assign(
@@ -440,13 +422,13 @@ test_that("run_chronos_with_restarts bounds an active attempt by the total budge
       observed_timeout <<- timeout_sec
       structure("mock failure", class = "try-error")
     },
-    envir = globalenv()
+    envir = environment(run_chronos_with_restarts)
   )
   on.exit({
     if (had_runner) {
-      assign("run_chronos_once", old_runner, envir = globalenv())
-    } else if (exists("run_chronos_once", envir = globalenv(), inherits = FALSE)) {
-      rm("run_chronos_once", envir = globalenv())
+      assign("run_chronos_once", old_runner, envir = environment(run_chronos_with_restarts))
+    } else if (exists("run_chronos_once", envir = environment(run_chronos_with_restarts), inherits = FALSE)) {
+      rm("run_chronos_once", envir = environment(run_chronos_with_restarts))
     }
   }, add = TRUE)
 
@@ -486,7 +468,7 @@ test_that("run_chronos_retry_pipeline skips empty calibration tables", {
     chronos_control = list(),
     chronos_lambda = 1,
     chronos_model = "discrete",
-    soft_attempts = list(list(model = "discrete", lambda = 1, label = "requested")),
+    alternate_strategies = list(list(model = "discrete", lambda = 1, label = "requested")),
     calibration_label = "S"
   )
 
@@ -496,128 +478,27 @@ test_that("run_chronos_retry_pipeline skips empty calibration tables", {
   expect_match(as.character(out$chronos_out), "No calibration nodes", ignore.case = TRUE)
 })
 
-test_that("run_chronos_retry_pipeline runs expanded and soft retries before succeeding", {
-  skip_if_not_installed("ape")
+test_that("retry strategies preserve bounds when switching model", {
   tree <- read.tree(text = "((A:1,B:1)n1:1,C:2)root;")
-  root_num <- get_root_num(tree)
-  n1_num <- get_node_num_by_name(tree, "n1")
-  calibration <- data.frame(
-    node = as.integer(c(root_num, n1_num)),
-    age.min = c(10, 5),
-    age.max = c(10, 5),
-    soft.bounds = c(NA, NA),
-    stringsAsFactors = FALSE
-  )
-
-  had_restart <- exists("run_chronos_with_restarts", envir = globalenv(), inherits = FALSE)
-  had_risk <- exists("detect_chronos_failure_risks", envir = globalenv(), inherits = FALSE)
-  had_expand <- exists("expand_narrow_calibration_ranges", envir = globalenv(), inherits = FALSE)
-  old_restart <- NULL
-  old_risk <- NULL
-  old_expand <- NULL
-  if (had_restart) old_restart <- get("run_chronos_with_restarts", envir = globalenv(), inherits = FALSE)
-  if (had_risk) old_risk <- get("detect_chronos_failure_risks", envir = globalenv(), inherits = FALSE)
-  if (had_expand) old_expand <- get("expand_narrow_calibration_ranges", envir = globalenv(), inherits = FALSE)
-
-  context_calls <- character()
-  assign(
-    "run_chronos_with_restarts",
-    function(...) {
-      args <- list(...)
-      context_calls <<- c(context_calls, args$context_label)
-      if (grepl("soft requested$", args$context_label)) {
-        fake_out <- structure(
-          list(edge.length = rep(1, nrow(tree$edge))),
-          class = c("chronos", "phylo")
-        )
-        return(list(
-          chronos_out = fake_out,
-          success = TRUE,
-          used_model = args$chronos_model,
-          used_lambda = args$chronos_lambda,
-          used_seed = as.integer(args$seed_base)
-        ))
-      }
-      list(
-        chronos_out = structure("mock failure", class = "try-error"),
-        success = FALSE,
-        used_model = args$chronos_model,
-        used_lambda = args$chronos_lambda,
-        used_seed = as.integer(args$seed_base)
-      )
-    },
-    envir = globalenv()
-  )
-  assign(
-    "detect_chronos_failure_risks",
-    function(...) {
-      list(
-        max_edge = 1,
-        min_positive_edge = 1,
-        edge_ratio = 1,
-        tight_nodes = integer(),
-        nonpositive_nodes = integer(),
-        min_span_threshold = 0,
-        risk_flags = c(
-          extreme_edge_ratio = FALSE,
-          large_edge_values = FALSE,
-          tight_nonroot_constraints = FALSE,
-          nonpositive_nonroot_constraints = FALSE
-        )
-      )
-    },
-    envir = globalenv()
-  )
-  assign(
-    "expand_narrow_calibration_ranges",
-    function(calibration_table, root_num, min_span = NULL) {
-      list(
-        calibration_table = calibration_table,
-        adjusted_nodes = data.frame(node = as.integer(root_num))
-      )
-    },
-    envir = globalenv()
-  )
-  on.exit({
-    if (had_restart) {
-      assign("run_chronos_with_restarts", old_restart, envir = globalenv())
-    } else if (exists("run_chronos_with_restarts", envir = globalenv(), inherits = FALSE)) {
-      rm("run_chronos_with_restarts", envir = globalenv())
-    }
-    if (had_risk) {
-      assign("detect_chronos_failure_risks", old_risk, envir = globalenv())
-    } else if (exists("detect_chronos_failure_risks", envir = globalenv(), inherits = FALSE)) {
-      rm("detect_chronos_failure_risks", envir = globalenv())
-    }
-    if (had_expand) {
-      assign("expand_narrow_calibration_ranges", old_expand, envir = globalenv())
-    } else if (exists("expand_narrow_calibration_ranges", envir = globalenv(), inherits = FALSE)) {
-      rm("expand_narrow_calibration_ranges", envir = globalenv())
-    }
-  }, add = TRUE)
-
-  out <- run_chronos_retry_pipeline(
-    phy = tree,
-    calibration_table = calibration,
-    root_num = root_num,
-    chronos_control = list(),
-    chronos_lambda = 1,
-    chronos_model = "discrete",
-    soft_attempts = list(
-      list(model = "discrete", lambda = 1, label = "requested"),
-      list(model = "relaxed", lambda = 1, label = "model-relaxed")
-    ),
-    calibration_label = "RS",
-    max_restarts_main = 2,
-    max_restarts_fallback = 1,
-    seed_cursor = 1
-  )
-
+  calibration <- data.frame(node = c(4L, 5L), age.min = c(10, 5), age.max = c(10, 5), soft.bounds = FALSE)
+  env <- new.env(parent = environment(run_chronos_retry_pipeline))
+  seen <- list()
+  env$run_chronos_with_restarts <- function(...) {
+    args <- list(...)
+    seen[[length(seen) + 1L]] <<- args$calibration
+    success <- identical(args$chronos_model, "relaxed")
+    list(chronos_out = if (success) tree else structure("retry", class = "try-error"),
+         success = success, used_model = args$chronos_model, used_lambda = args$chronos_lambda,
+         used_seed = args$seed_base)
+  }
+  runner <- run_chronos_retry_pipeline
+  environment(runner) <- env
+  out <- runner(tree, calibration, 4L, list(), 1, "discrete",
+                list(list(model = "relaxed", lambda = 1, label = "relaxed")))
   expect_true(out$success)
-  expect_true(any(context_calls == "chronos RS"))
-  expect_true(any(context_calls == "chronos RS expanded"))
-  expect_true(any(context_calls == "chronos RS soft requested"))
-  expect_false(any(grepl("aggressive", context_calls)))
+  expect_identical(out$calibration_table, calibration)
+  expect_length(seen, 2L)
+  expect_true(all(vapply(seen, identical, logical(1), calibration)))
 })
 
 test_that("validate_chronos_output rejects numerically invalid chronos outputs", {
@@ -678,55 +559,6 @@ test_that("run_chronos_with_restarts treats invalid relaxed chronos result as fa
   expect_match(as.character(out$chronos_out), "Invalid chronos output", fixed = TRUE)
 })
 
-test_that("expanded bounds improve soft-bound chronos stability for tight near-root constraints", {
-  skip_if_not_installed("ape")
-  tree <- read.tree(text = "(((t1:0.04671798803,(((t2:1e-08,t3:4.857363743e-08)n6:0.01533183806,t4:0.01287520729)n5:1e-08,t5:0.0001124112221)n4:46.66416385)n3:1.982858307e-05,t6:1e-08)n2:1000,(t7:1e-08,t8:1e-08)n7:1e-08)n1;")
-  calibration <- data.frame(
-    node = as.integer(c(9, 15, 13, 14, 11, 12)),
-    age.min = c(100, 97.47033, 97.47033, 97.47033, 97.47033, 97.47033),
-    age.max = c(100, 97.47033, 97.47033, 97.47033, 97.47033, 97.47033),
-    soft.bounds = NA,
-    stringsAsFactors = FALSE
-  )
-  root_num <- 9L
-  ctl <- chronos.control()
-  ctl$iter.max <- 1200
-  ctl$eval.max <- 1200
-  ctl$dual.iter.max <- 80
-
-  soft_from_original <- make_soft_bounds_for_nonroot(calibration, root_num)
-  expanded <- expand_narrow_calibration_ranges(calibration, root_num)
-  soft_from_expanded <- make_soft_bounds_for_nonroot(expanded$calibration_table, root_num)
-
-  out_original <- suppressWarnings(
-    run_chronos_with_restarts(
-      phy = tree,
-      calibration = soft_from_original,
-      chronos_control = ctl,
-      chronos_lambda = 1,
-      chronos_model = "relaxed",
-      context_label = "test-soft-original",
-      max_restarts = 1,
-      seed_base = 1
-    )
-  )
-  out_expanded <- suppressWarnings(
-    run_chronos_with_restarts(
-      phy = tree,
-      calibration = soft_from_expanded,
-      chronos_control = ctl,
-      chronos_lambda = 1,
-      chronos_model = "relaxed",
-      context_label = "test-soft-expanded",
-      max_restarts = 1,
-      seed_base = 1
-    )
-  )
-
-  expect_false(out_original$success)
-  expect_true(out_expanded$success)
-})
-
 test_that("build_dated_tree_without_chronos returns a bounded ultrametric tree", {
   tree <- read.tree(text = "((A:1,B:1)n1:1,C:2)root;")
   root_num <- get_root_num(tree)
@@ -746,7 +578,7 @@ test_that("build_dated_tree_without_chronos returns a bounded ultrametric tree",
   expect_lte(ages[n1_num], 8 + 1e-6)
 })
 
-test_that("build_dated_tree_without_chronos relaxes infeasible lower bounds and still returns a tree", {
+test_that("build_dated_tree_without_chronos rejects infeasible lower bounds", {
   tree <- read.tree(text = "((A:1,B:1)n1:1,C:2)root;")
   root_num <- get_root_num(tree)
   n1_num <- get_node_num_by_name(tree, "n1")
@@ -758,6 +590,6 @@ test_that("build_dated_tree_without_chronos relaxes infeasible lower bounds and 
     stringsAsFactors = FALSE
   )
   out <- build_dated_tree_without_chronos(tree, calibration, root_num)
-  expect_true(inherits(out, "phylo"))
-  expect_true(all(out$edge.length > 0))
+  expect_s3_class(out, "try-error")
+  expect_match(as.character(out), "temporally infeasible")
 })

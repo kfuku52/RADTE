@@ -226,8 +226,9 @@ test_that("leaf2species: short names are skipped with warning", {
   # "AB" -> split ["AB"] -> length=1 < 3 -> warning, skipped
   # "X_Y" -> split ["X","Y"] -> length=2 < 3 -> warning, skipped
   # Result: empty character vector
-  expect_warning(result <- leaf2species(c("AB", "X_Y")))
-  expect_equal(length(result), 0)
+  expect_warning(first <- leaf2species("AB"), "AB")
+  expect_warning(second <- leaf2species("X_Y"), "X_Y")
+  expect_equal(length(c(first, second)), 0)
 })
 
 test_that("leaf2species: mixed valid and invalid names", {

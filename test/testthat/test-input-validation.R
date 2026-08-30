@@ -642,7 +642,7 @@ test_that("RADTE errors when duplicated-mode gene tree lacks branch lengths", {
     "--pad_short_edge=0.001"
   )
   expect_true(result$exit_code != 0)
-  expect_match(result$stderr, "gene tree for chronos does not contain branch length", ignore.case = TRUE)
+  expect_match(result$stderr, "gene tree does not contain branch length", ignore.case = TRUE)
 })
 
 test_that("RADTE NOTUNG mode errors clearly when lower/upper age bounds remain unresolved", {
@@ -672,7 +672,7 @@ test_that("RADTE NOTUNG mode errors clearly when lower/upper age bounds remain u
     "--pad_short_edge=0.001"
   )
   expect_true(result$exit_code != 0)
-  expect_match(result$stderr, "unresolved age bound", ignore.case = TRUE)
+  expect_match(result$stderr, "lower_sp_node.*not found", ignore.case = TRUE)
 })
 
 # --- Neither mode flag specified ---
@@ -746,7 +746,7 @@ test_that("RADTE errors with explicit message when --gene_tree is missing in NOT
     "--max_age=100", "--chronos_lambda=1", "--chronos_model=discrete"
   )
   expect_true(result$exit_code != 0)
-  expect_match(result$stderr, "--gene_tree should be specified in Notung mode", ignore.case = TRUE)
+  expect_match(result$stderr, "Missing required argument.*--gene_tree", ignore.case = TRUE)
 })
 
 test_that("RADTE errors on non-numeric --max_age", {

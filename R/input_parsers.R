@@ -148,7 +148,7 @@ detect_species_map_has_header = function(file) {
         stop('Species map TSV is empty.')
     }
     first_fields = strsplit(lines[[1]], '\t', fixed=TRUE)[[1]]
-    first_fields_norm = tolower(gsub('[^a-z0-9]+', '', first_fields))
+    first_fields_norm = gsub('[^a-z0-9]+', '', tolower(first_fields))
     label_candidates = c('label', 'tip', 'tiplabel', 'genetip', 'genelabel', 'input', 'query', 'name', 'alias')
     species_candidates = c('species', 'specieslabel', 'canonicalspecies', 'mappedspecies', 'canonical')
     return(
@@ -180,6 +180,8 @@ read_species_map_tsv = function(file) {
         sep='\t',
         header=has_header,
         stringsAsFactors=FALSE,
+        colClasses='character',
+        na.strings='',
         check.names=FALSE,
         quote='',
         comment.char=''
@@ -194,7 +196,7 @@ read_species_map_tsv = function(file) {
             colnames(map_df)[[3]] = 'taxonomy_query'
         }
     } else {
-        colnames_norm = tolower(gsub('[^a-z0-9]+', '', colnames(map_df)))
+        colnames_norm = gsub('[^a-z0-9]+', '', tolower(colnames(map_df)))
         label_idx = find_species_map_column(
             colnames_norm,
             c('label', 'tip', 'tiplabel', 'genetip', 'genelabel', 'input', 'query', 'name', 'alias')
@@ -257,6 +259,8 @@ read_species_node_bounds_tsv = function(file) {
         sep='\t',
         header=TRUE,
         stringsAsFactors=FALSE,
+        colClasses='character',
+        na.strings='',
         check.names=FALSE,
         quote='',
         comment.char=''
@@ -265,7 +269,7 @@ read_species_node_bounds_tsv = function(file) {
         stop('Species node bounds TSV should contain at least two tab-delimited columns with a header.')
     }
 
-    colnames_norm = tolower(gsub('[^a-z0-9]+', '', colnames(bounds_df)))
+    colnames_norm = gsub('[^a-z0-9]+', '', tolower(colnames(bounds_df)))
     node_idx = find_species_map_column(
         colnames_norm,
         c('node', 'nodelabel', 'speciesnode', 'speciesnodelabel', 'spnode')
@@ -719,7 +723,16 @@ leaf2species = function(leaf_names, species_parser=NULL, species_tree_labels=NUL
     return(species_parser_taxonomy_query(species_parser, species_names))
 }
 
+unquote_newick_labels = function(labels) {
+    if (is.null(labels)) return(NULL)
+    quoted = !is.na(labels) & startsWith(labels, "'") & endsWith(labels, "'") & nchar(labels) >= 2L
+    labels[quoted] = gsub("''", "'", substring(labels[quoted], 2L, nchar(labels[quoted]) - 1L), fixed=TRUE)
+    labels
+}
+
 validate_species_tree_labels = function(sp_tree) {
+    sp_tree$tip.label = unquote_newick_labels(sp_tree$tip.label)
+    sp_tree$node.label = unquote_newick_labels(sp_tree$node.label)
     node_labels = sp_tree[['node.label']]
     if (is.null(node_labels)) {
         node_labels = character(0)
@@ -794,6 +807,8 @@ validate_gene_species_coverage = function(gn_tree, sp_tree, species_parser=NULL,
 }
 
 validate_gene_tree_labels = function(gn_tree) {
+    gn_tree$tip.label = unquote_newick_labels(gn_tree$tip.label)
+    gn_tree$node.label = unquote_newick_labels(gn_tree$node.label)
     node_labels = gn_tree[['node.label']]
     if (is.null(node_labels)) {
         node_labels = character(0)

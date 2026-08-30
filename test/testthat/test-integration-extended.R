@@ -586,7 +586,7 @@ test_that("RADTE handles gene tree with moderately large branch lengths", {
   expect_true(is.ultrametric(out_tree))
 })
 
-test_that("RADTE stabilizes risky descendant constraints without dropping RS constraints", {
+test_that("RADTE rejects infeasible speciation ages instead of silently relaxing them", {
   sp_file <- tempfile(fileext = ".nwk")
   writeLines("((A_sp:10,B_sp:10)s1:20,C_sp:30)sroot;", sp_file)
   on.exit(unlink(sp_file))
@@ -625,15 +625,10 @@ test_that("RADTE stabilizes risky descendant constraints without dropping RS con
   setwd(out_dir)
   on.exit(setwd(old_wd), add = TRUE)
 
-  exit_code <- system(cmd, ignore.stdout = TRUE, ignore.stderr = TRUE)
-  expect_equal(exit_code, 0)
-
-  cal_nodes <- readLines(file.path(out_dir, "radte_calibrated_nodes.txt"))
-  expect_equal(cal_nodes[1], "RS")
-
-  cal_used <- read.delim(file.path(out_dir, "radte_calibration_used.tsv"))
-  expect_equal(sum(cal_used$event == "R"), 1)
-  expect_equal(sum(cal_used$event == "S"), 2)
-  expect_equal(nrow(cal_used), 3)
-  expect_true(any(cal_used$event == "S" & cal_used$age.max < 10))
+  log <- tempfile()
+  on.exit(unlink(log), add = TRUE)
+  exit_code <- system(paste(cmd, ">", shQuote(log), "2>&1"))
+  expect_equal(exit_code, 1)
+  expect_match(paste(readLines(log), collapse = "\n"), "temporally infeasible")
+  expect_false(file.exists(file.path(out_dir, "radte_run_manifest.tsv")))
 })

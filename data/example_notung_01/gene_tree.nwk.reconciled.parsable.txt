@@ -3,16 +3,16 @@ nD	nCD	nT	nL	|L(G)|	|G|	|S|	minEW,maxEW	Roots	Cand	Feas	cD	cCD	cT	cL
 
 
 #D	Duplication	L.Bound	U.Bound
-#D	n54	47	n170
-#D	n43	42	40
-#D	n27	42	40
-#D	n23	42	40
-#D	n17	42	40
-#D	n16	Oryctolagus_cuniculus	29
-#D	n52	Monodelphis_domestica	40
-#D	n50	Monodelphis_domestica	40
-#D	n48	Monodelphis_domestica	40
-#D	n46	Monodelphis_domestica	40
+#D	n54	n47	Root
+#D	n43	n42	n40
+#D	n27	n42	n40
+#D	n23	n42	n40
+#D	n17	n42	n40
+#D	n16	Oryctolagus_cuniculus	n29
+#D	n52	Monodelphis_domestica	n40
+#D	n50	Monodelphis_domestica	n40
+#D	n48	Monodelphis_domestica	n40
+#D	n46	Monodelphis_domestica	n40
 
 #L	Species	Losses
 #L	47	0

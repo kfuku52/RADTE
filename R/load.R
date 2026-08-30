@@ -3,10 +3,14 @@ radte_module_files <- c(
     "R/cli.R",
     "R/tree_navigation.R",
     "R/input_parsers.R",
+    "R/calibration.R",
     "R/chronos_backend.R",
     "R/output.R",
     "R/mcmctree_backend.R",
     "R/generax.R",
+    "R/preparation.R",
+    "R/dating.R",
+    "R/run_output.R",
     "R/main.R"
 )
 

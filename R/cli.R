@@ -29,32 +29,34 @@ get_parsed_args = function(args, print=TRUE) {
     return(parsed)
 }
 
-radte_option = function(type, default=NULL, help, choices=NULL, min_value=NULL, backend='all') {
+radte_option = function(type, default=NULL, help, choices=NULL, min_value=NULL, backend='all', required=NULL, exclusive_min=FALSE) {
     list(
         type=type,
         default=default,
         help=help,
         choices=choices,
         min_value=min_value,
-        backend=backend
+        backend=backend,
+        required=required,
+        exclusive_min=exclusive_min
     )
 }
 
 get_radte_option_schema = function() {
     list(
-        allow_constraint_drop=radte_option('boolean', TRUE, 'Allow S/R constraint-drop fallback stages.', backend='chronos'),
+        allow_constraint_drop=radte_option('boolean', TRUE, 'Allow S/R constraint-drop fallback stages; retained age bounds are never relaxed.', backend='chronos'),
         chronos_attempt_timeout_sec=radte_option('timeout', 60, 'Wall-time limit per chronos attempt; 0/inf/none/off disables it.', backend='chronos'),
         chronos_dual_iter_max=radte_option('integer', 20L, 'Initial chronos dual.iter.max.', min_value=0L, backend='chronos'),
         chronos_eval_max=radte_option('integer', 250L, 'Initial chronos eval.max.', min_value=1L, backend='chronos'),
         chronos_high_control_fallback=radte_option('boolean', TRUE, 'Enable the high-cost chronos control fallback.', backend='chronos'),
         chronos_iter_max=radte_option('integer', 250L, 'Initial chronos iter.max.', min_value=1L, backend='chronos'),
-        chronos_lambda=radte_option('number', NULL, 'Chronos smoothing parameter (required for chronos).', min_value=0, backend='chronos'),
-        chronos_model=radte_option('choice', NULL, 'Chronos model (required for chronos).', choices=c('discrete', 'relaxed', 'correlated'), backend='chronos'),
+        chronos_lambda=radte_option('number', NULL, 'Chronos smoothing parameter (required for chronos).', min_value=0, backend='chronos', required='chronos'),
+        chronos_model=radte_option('choice', NULL, 'Chronos model (required for chronos).', choices=c('discrete', 'relaxed', 'correlated'), backend='chronos', required='chronos'),
         chronos_total_timeout_sec=radte_option('timeout', 300, 'Total wall-time budget for chronos retries; 0/inf/none/off disables it.', backend='chronos'),
         dating_backend=radte_option('choice', 'chronos', 'Dating engine.', choices=c('chronos', 'mcmctree')),
-        gene_tree=radte_option('path', NULL, 'Rooted Newick gene tree (required in NOTUNG mode).'),
+        gene_tree=radte_option('path', NULL, 'Rooted Newick gene tree (required in NOTUNG mode).', required='notung'),
         generax_nhx=radte_option('path', NULL, 'GeneRax NHX reconciliation input.'),
-        max_age=radte_option('number', NULL, 'Upper age for duplication nodes above the species-tree root.', min_value=0),
+        max_age=radte_option('number', NULL, 'Upper age for duplication nodes above the species-tree root.', min_value=0, exclusive_min=TRUE, required='all'),
         mcmctree_bin=radte_option('path', 'mcmctree', 'MCMCTree executable name or path.', backend='mcmctree'),
         mcmctree_burnin=radte_option('integer', 2000L, 'MCMCTree burn-in samples.', min_value=1L, backend='mcmctree'),
         mcmctree_clock=radte_option('integer', 2L, 'MCMCTree clock model.', min_value=1L, backend='mcmctree'),
@@ -62,26 +64,66 @@ get_radte_option_schema = function() {
         mcmctree_ncatG=radte_option('integer', 5L, 'MCMCTree number of gamma categories.', min_value=1L, backend='mcmctree'),
         mcmctree_nsample=radte_option('integer', 20000L, 'MCMCTree number of posterior samples.', min_value=1L, backend='mcmctree'),
         mcmctree_sampfreq=radte_option('integer', 10L, 'MCMCTree sampling frequency.', min_value=1L, backend='mcmctree'),
-        mcmctree_seqfile=radte_option('path', NULL, 'MCMCTree alignment file (required for mcmctree).', backend='mcmctree'),
+        mcmctree_seqfile=radte_option('path', NULL, 'MCMCTree alignment file (required for mcmctree).', backend='mcmctree', required='mcmctree'),
         mcmctree_seqtype=radte_option('integer', 0L, 'MCMCTree sequence type.', min_value=0L, backend='mcmctree'),
         mcmctree_timeout_sec=radte_option('timeout', Inf, 'Wall-time limit for the external MCMCTree process.', backend='mcmctree'),
         mcmctree_usedata=radte_option('integer', 1L, 'MCMCTree usedata value; RADTE currently supports only 1.', min_value=1L, backend='mcmctree'),
         mcmctree_workdir=radte_option('path', NULL, 'Explicit MCMCTree staging directory; default is a unique directory under outdir.', backend='mcmctree'),
         notung_parsable=radte_option('path', NULL, 'NOTUNG parsable reconciliation input.'),
         outdir=radte_option('path', '.', 'Directory for RADTE output artifacts.'),
-        pad_short_edge=radte_option('number', NULL, 'Minimum dated branch length.', min_value=0),
+        pad_short_edge=radte_option('number', NULL, 'Minimum dated branch length, subject to the original calibration bounds.', min_value=0, exclusive_min=TRUE),
         prefix=radte_option('string', 'radte', 'Output filename prefix.'),
         seed=radte_option('integer', 1L, 'Base random seed for chronos retries and MCMCTree.', min_value=1L),
         species_map_tsv=radte_option('path', NULL, 'Species mapping TSV for --species_parser=map.'),
         species_node_bounds_tsv=radte_option('path', NULL, 'Species-tree node age bounds TSV.'),
         species_parser=radte_option('choice', 'legacy', 'Species-label parser.', choices=c('legacy', 'taxonomic', 'regex', 'map')),
         species_regex=radte_option('string', NULL, 'Species extraction regex for --species_parser=regex.'),
-        species_tree=radte_option('path', NULL, 'Rooted, dated, fully bifurcating species tree.')
+        species_tree=radte_option('path', NULL, 'Rooted, dated, fully bifurcating species tree.', required='all')
     )
 }
 
 get_radte_allowed_args = function() {
     names(get_radte_option_schema())
+}
+
+resolve_radte_config = function(args, schema=get_radte_option_schema()) {
+    validate_parsed_args(args, names(schema))
+    supplied = names(args)
+    if (all(c('generax_nhx', 'notung_parsable') %in% supplied)) {
+        stop('Only one of --notung_parsable and --generax_nhx should be specified.')
+    }
+    if (!any(c('generax_nhx', 'notung_parsable') %in% supplied)) {
+        stop('--notung_parsable or --generax_nhx should be specified.')
+    }
+    for (name in setdiff(names(schema), supplied)) {
+        if (!is.null(schema[[name]]$default)) args[[name]] = schema[[name]]$default
+    }
+    args = coerce_radte_args(args, schema)
+    mode = if ('generax_nhx' %in% supplied) 'generax' else 'notung'
+    contexts = c('all', mode, args$dating_backend)
+    required = names(schema)[vapply(schema, function(spec) any(spec$required %in% contexts), logical(1))]
+    missing = setdiff(required, names(args))
+    if (length(missing)) stop('Missing required argument(s): ', paste(paste0('--', missing), collapse=', '))
+    if (grepl('[/\\\\]', args$prefix) || args$prefix %in% c('.', '..')) {
+        stop('--prefix should be a non-empty filename prefix without path separators.')
+    }
+    if (args$species_parser == 'map' && is.null(args$species_map_tsv)) {
+        stop('--species_map_tsv is required for --species_parser=map.')
+    }
+    if (args$species_parser == 'regex' && is.null(args$species_regex)) {
+        stop('--species_regex is required for --species_parser=regex.')
+    }
+    if (args$dating_backend == 'mcmctree' && args$mcmctree_usedata != 1L) {
+        stop('--mcmctree_usedata currently supports only 1 in RADTE.')
+    }
+    args$chronos_attempt_timeout_sec = min(args$chronos_attempt_timeout_sec, args$chronos_total_timeout_sec)
+    attr(args, 'supplied') = supplied
+    attr(args, 'mode') = mode
+    args
+}
+
+radte_attempt_seed = function(seed_base, offset=0) {
+    as.integer((as.double(seed_base) - 1 + offset) %% .Machine$integer.max + 1)
 }
 
 validate_parsed_args = function(args, allowed_args=get_radte_allowed_args()) {
@@ -110,18 +152,25 @@ coerce_radte_args = function(args, schema=get_radte_option_schema()) {
         } else if (spec$type == 'timeout') {
             value = parse_timeout_arg(value, arg_name)
         } else if (spec$type == 'choice') {
-            # Preserve the dedicated chronos typo suggestion in radte_main.
-            if (name != 'chronos_model') {
-                value = parse_choice_arg(value, arg_name, spec$choices)
+            if (name == 'chronos_model' && identical(tolower(trimws(value)), 'difscrete')) {
+                stop('--chronos_model should be one of: discrete, relaxed, correlated. Did you mean "discrete"?')
             }
+            value = parse_choice_arg(value, arg_name, spec$choices)
         } else if (spec$type == 'number') {
-            value_num = suppressWarnings(as.numeric(value))
-            if (length(value_num) != 1 || is.na(value_num) || !is.finite(value_num)) {
-                value = value
-            } else {
-                value = value_num
+            value = suppressWarnings(as.numeric(value))
+            if (length(value) != 1L || is.na(value) || !is.finite(value)) {
+                description = if (spec$exclusive_min) 'positive finite number' else 'non-negative finite number'
+                stop(arg_name, ' should be a ', description, '.')
+            }
+            if (!is.null(spec$min_value) &&
+                (value < spec$min_value || (spec$exclusive_min && value == spec$min_value))) {
+                description = if (spec$exclusive_min) 'positive finite number' else 'non-negative finite number'
+                stop(arg_name, ' should be a ', description, '.')
             }
         } else if (spec$type %in% c('path', 'string')) {
+            if (length(value) != 1L || is.na(value) || !nzchar(trimws(value))) {
+                stop(arg_name, ' should be a non-empty ', if (spec$type == 'path') 'path.' else 'string.')
+            }
             value = as.character(value)
         }
         args[[name]] = value
@@ -209,7 +258,10 @@ parse_timeout_arg = function(value, arg_name) {
         }
     }
     value_num = suppressWarnings(as.numeric(value))
-    if ((!is.na(value_num)) && is.infinite(value_num)) {
+    if (length(value_num) != 1L || is.na(value_num)) {
+        stop(arg_name, ' should be a non-negative number or one of: inf, none, off.')
+    }
+    if (is.infinite(value_num)) {
         if (value_num > 0) {
             return(Inf)
         }
@@ -237,7 +289,8 @@ parse_choice_arg = function(value, arg_name, supported_values) {
 
 parse_integer_arg = function(value, arg_name, min_value=NULL) {
     value_num = suppressWarnings(as.numeric(value))
-    if (is.na(value_num) || (!is.finite(value_num)) || (value_num != round(value_num))) {
+    if (length(value_num) != 1L || is.na(value_num) || !is.finite(value_num) ||
+        value_num != round(value_num) || abs(value_num) > .Machine$integer.max) {
         stop(arg_name, ' should be an integer.')
     }
     value_int = as.integer(round(value_num))

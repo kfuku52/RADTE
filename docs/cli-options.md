@@ -3,7 +3,7 @@
 This file is generated from `R/cli.R`. Run `make cli-docs` after changing the option schema.
 
 ```text
-RADTE 0.5.1
+RADTE 0.6.0
 
 Usage:
   radte --species_tree=FILE (--notung_parsable=FILE --gene_tree=FILE | --generax_nhx=FILE) [options]
@@ -14,7 +14,7 @@ Meta options:
 
 Options use --key=value syntax:
   --allow_constraint_drop=VALUE
-      Allow S/R constraint-drop fallback stages. [default: true; backend: chronos].
+      Allow S/R constraint-drop fallback stages; retained age bounds are never relaxed. [default: true; backend: chronos].
   --chronos_attempt_timeout_sec=VALUE
       Wall-time limit per chronos attempt; 0/inf/none/off disables it. [default: 60; backend: chronos].
   --chronos_dual_iter_max=VALUE
@@ -68,7 +68,7 @@ Options use --key=value syntax:
   --outdir=VALUE
       Directory for RADTE output artifacts. [default: .; backend: all].
   --pad_short_edge=VALUE
-      Minimum dated branch length. [default: required/conditional; backend: all].
+      Minimum dated branch length, subject to the original calibration bounds. [default: required/conditional; backend: all].
   --prefix=VALUE
       Output filename prefix. [default: radte; backend: all].
   --seed=VALUE

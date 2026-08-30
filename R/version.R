@@ -1,1 +1,1 @@
-radte_version = '0.5.1'
+radte_version = '0.6.0'
