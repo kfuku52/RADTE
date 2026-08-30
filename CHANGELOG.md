@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1
+
+- Preserve the executable link name when invoking PAML wrappers that select a program by their invocation name, including the Debian/Ubuntu package.
+- Capture CLI validation errors portably in the infeasible-constraint regression test, including on Windows.
+- Give the finite-timeout numerical reproducibility test scheduling headroom without changing production timeouts or dedicated timeout assertions.
+
 ## 0.6.0
 
 - Preserve original chronos age bounds, reject infeasible constraints, and validate dated ages, topology, tip sets, and positive branches. Retries no longer widen or soften hard constraints.

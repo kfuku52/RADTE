@@ -424,6 +424,7 @@ test_that("PAML integration preserves bounds and verifies mirror ages", {
       collapse = "\n"
     )
     fail(paste("RADTE/PAML integration failed:\n", diagnostics))
+    return(invisible(NULL))
   }
 
   gene_table <- read.delim(file.path(out_dir, "radte_gene_tree.tsv"))

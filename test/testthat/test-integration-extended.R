@@ -612,8 +612,8 @@ test_that("RADTE rejects infeasible speciation ages instead of silently relaxing
   dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
   on.exit(unlink(out_dir, recursive = TRUE), add = TRUE)
 
-  cmd <- paste(
-    "Rscript", shQuote(radte_script),
+  args <- c(
+    shQuote(radte_script),
     paste0("--species_tree=", shQuote(sp_file)),
     paste0("--gene_tree=", shQuote(gn_file)),
     paste0("--notung_parsable=", shQuote(parsable_file)),
@@ -627,7 +627,7 @@ test_that("RADTE rejects infeasible speciation ages instead of silently relaxing
 
   log <- tempfile()
   on.exit(unlink(log), add = TRUE)
-  exit_code <- system(paste(cmd, ">", shQuote(log), "2>&1"))
+  exit_code <- system2("Rscript", args, stdout = FALSE, stderr = log)
   expect_equal(exit_code, 1)
   expect_match(paste(readLines(log), collapse = "\n"), "temporally infeasible")
   expect_false(file.exists(file.path(out_dir, "radte_run_manifest.tsv")))

@@ -1,7 +1,7 @@
 Package: RADTE
 Type: Package
 Title: Relatively and Absolutely Dating Tree Events
-Version: 0.6.0
+Version: 0.6.1
 Authors@R: person("Kenji", "Fukushima", role = c("aut", "cre"),
     email = "kfuku52@gmail.com")
 Description: Infers absolute ages of gene duplication and speciation events by

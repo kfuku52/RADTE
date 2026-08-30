@@ -44,14 +44,17 @@ test_that("real chronos repeats with finite timeout and restores the caller RNG"
   calibration <- data.frame(node = 5L, age.min = 10, age.max = 20, soft.bounds = FALSE)
   set.seed(71)
   saved <- .Random.seed
+  # This checks reproducibility, not speed; keep a finite deadline with room for
+  # shared-host load. Dedicated timeout tests exercise termination separately.
   run <- function() suppressWarnings(run_chronos_with_restarts(
     tree, calibration, chronos.control(), 1, "discrete", max_restarts = 1,
-    seed_base = 42, attempt_timeout_sec = 5
+    seed_base = 42, attempt_timeout_sec = 30
   ))
   one <- run()
   two <- run()
   expect_true(one$success)
   expect_true(two$success)
+  if (!isTRUE(one$success) || !isTRUE(two$success)) return(invisible(NULL))
   expect_identical(one$chronos_out$edge.length, two$chronos_out$edge.length)
   expect_identical(.Random.seed, saved)
 })
@@ -173,6 +176,19 @@ test_that("MCMCTree supports relative executable paths and rejects malformed pos
   result <- run()
   expect_identical(result$tree$edge, tree$edge)
   expect_identical(result$tree$tip.label, tree$tip.label)
+
+  # Like Debian PAML, a wrapper may select its program using the link name.
+  writeLines(c("#!/bin/sh", '[ "${0##*/}" = "mcmctree" ] || exit 91',
+               "cat > out.txt <<'TREE'", "Species tree for FigTree",
+               "(A:1,B:1);", "(A:1,B:1);", "TREE"), bin)
+  alias <- file.path("relative bin", "mcmctree")
+  expect_true(file.symlink("sentinel", alias))
+  absolute_alias <- file.path(normalizePath(dirname(alias)), basename(alias))
+  for (binary in c(alias, absolute_alias, "mcmctree")) {
+    result <- run(binary)
+    expect_identical(result$tree$edge.length, tree$edge.length)
+    expect_identical(result$executable, absolute_alias)
+  }
 })
 
 test_that("MCMCTree writer handles deep trees without recursion", {

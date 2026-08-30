@@ -4,7 +4,7 @@
 # Do not edit this bundled distribution script directly.
 
 # ---- BEGIN R/version.R ----
-radte_version = '0.6.0'
+radte_version = '0.6.1'
 # ---- END R/version.R ----
 
 # ---- BEGIN R/cli.R ----
@@ -3306,7 +3306,8 @@ run_mcmctree_backend = function(
         stop('MCMCTree executable was not found: ', bin)
     }
 
-    bin_path = normalizePath(bin_path, mustWork=TRUE)
+    # Keep the final link name: PAML's Debian wrapper dispatches by basename($0).
+    bin_path = file.path(normalizePath(dirname(bin_path), mustWork=TRUE), basename(bin_path))
     if (file.access(bin_path, 1L) != 0L) stop('MCMCTree executable is not executable: ', bin_path)
     seqfile = normalizePath(seqfile, mustWork=TRUE)
     tree_info = build_mcmctree_tree_text(phy, gn_node_table, calibration_table, root_num)
@@ -3415,7 +3416,7 @@ run_mcmctree_backend = function(
             duplication_flag=tree_info$duplication_flag,
             mirror_table=tree_info$mirror_table,
             shared_speciation_ages=shared_speciation_ages,
-            executable=normalizePath(bin_path, mustWork=TRUE),
+            executable=bin_path,
             banner=mcmctree_banner,
             seed=as.integer(seed)
         )
