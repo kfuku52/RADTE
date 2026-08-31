@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.2
+
+- Keep documentation-only CI lightweight when the required patch version bump also updates metadata and the generated CLI. Dependency, runtime, executable-mode, and release changes still receive full validation.
+
 ## 0.6.1
 
 - Preserve the executable link name when invoking PAML wrappers that select a program by their invocation name, including the Debian/Ubuntu package.

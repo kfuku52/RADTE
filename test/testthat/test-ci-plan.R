@@ -18,6 +18,55 @@ test_that("CI keeps platform and release coverage while skipping documentation-o
   expect_true(env$ci_plan(character(), "workflow_dispatch", "0.6.1")$code)
 })
 
+test_that("CI excludes required version bumps but retains dependency, code and mode changes", {
+  skip_if(!nzchar(Sys.which("git")), "git is required for CI diff classification")
+  env <- new.env(parent = baseenv())
+  sys.source(file.path(project_root, "tools", "ci_plan.R"), envir = env)
+  repo <- tempfile("radte_ci_diff_")
+  dir.create(file.path(repo, "R"), recursive = TRUE)
+  on.exit(unlink(repo, recursive = TRUE))
+  git <- function(...) {
+    status <- system2("git", c("-C", shQuote(repo), ...), stdout = FALSE, stderr = FALSE)
+    stopifnot(status == 0L)
+  }
+  git("init", "-q")
+  git("config", "core.autocrlf", "false")
+  hooks <- file.path(repo, "empty-hooks")
+  dir.create(hooks)
+  write_version <- function(version) {
+    writeLines(paste0("radte_version = '", version, "'"), file.path(repo, "R/version.R"))
+    writeLines(c(paste0("radte_version = '", version, "'"), "run()"), file.path(repo, "radte.r"))
+    writeLines(c("Package: example", paste0("Version: ", version), "Imports: ape"),
+               file.path(repo, "DESCRIPTION"))
+  }
+  write_version("0.6.1")
+  git("add", ".")
+  git("-c", "user.name=RADTE", "-c", "user.email=radte@example.invalid", "-c", "commit.gpgsign=false",
+      "-c", shQuote(paste0("core.hooksPath=", hooks)), "commit", "-qm", "baseline")
+  write_version("0.6.2")
+  changed <- c("README.md", "docs/cli-options.md", "R/version.R", "radte.r", "DESCRIPTION")
+  ignored <- env$ci_version_only_files(changed, "HEAD", head = character(), root = repo)
+  expect_setequal(ignored, c("R/version.R", "radte.r", "DESCRIPTION"))
+  expect_false(env$ci_plan(changed, "push", "0.6.2", ignored)$code)
+  expect_true(env$ci_plan(changed, "push", "0.7.0", ignored)$code)
+  expect_true(env$ci_plan(changed, "schedule", "0.6.2", ignored)$code)
+  writeLines(c("Package: example", "Version: 0.6.2", "Imports: ape, exampleDependency"),
+             file.path(repo, "DESCRIPTION"))
+  writeLines(c("radte_version = '0.6.2'", "changed_run()"), file.path(repo, "radte.r"))
+  ignored <- env$ci_version_only_files(changed, "HEAD", head = character(), root = repo)
+  expect_identical(ignored, "R/version.R")
+  expect_true(env$ci_plan(changed, "push", "0.6.2", ignored)$code)
+  writeLines(c("radte_version = '0.6.2'", "unexpected_code()"), file.path(repo, "R/version.R"))
+  expect_length(env$ci_version_only_files(changed, "HEAD", head = character(), root = repo), 0)
+  if (.Platform$OS.type == "unix") {
+    write_version("0.6.2")
+    git("config", "core.filemode", "true")
+    Sys.chmod(file.path(repo, "radte.r"), "0755")
+    ignored <- env$ci_version_only_files(changed, "HEAD", head = character(), root = repo)
+    expect_false("radte.r" %in% ignored)
+  }
+})
+
 test_that("quoted species labels preserve numeric IDs without temporary-prefix collisions", {
   tree <- read.tree(text = "(('001':1,B_sp:1)'002':1,C_sp:2)PLACEHOLDER123;")
   tree <- validate_species_tree_labels(tree)

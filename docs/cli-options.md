@@ -3,7 +3,7 @@
 This file is generated from `R/cli.R`. Run `make cli-docs` after changing the option schema.
 
 ```text
-RADTE 0.6.1
+RADTE 0.6.2
 
 Usage:
   radte --species_tree=FILE (--notung_parsable=FILE --gene_tree=FILE | --generax_nhx=FILE) [options]
