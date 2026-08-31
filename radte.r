@@ -4,7 +4,7 @@
 # Do not edit this bundled distribution script directly.
 
 # ---- BEGIN R/version.R ----
-radte_version = '0.6.2'
+radte_version = '0.6.3'
 # ---- END R/version.R ----
 
 # ---- BEGIN R/cli.R ----
@@ -54,18 +54,18 @@ radte_option = function(type, default=NULL, help, choices=NULL, min_value=NULL, 
 
 get_radte_option_schema = function() {
     list(
-        allow_constraint_drop=radte_option('boolean', TRUE, 'Allow S/R constraint-drop fallback stages; retained age bounds are never relaxed.', backend='chronos'),
-        chronos_attempt_timeout_sec=radte_option('timeout', 60, 'Wall-time limit per chronos attempt; 0/inf/none/off disables it.', backend='chronos'),
+        allow_constraint_drop=radte_option('boolean', TRUE, 'Allow RS -> S -> R fallback within each control profile; retained bounds are never relaxed.', backend='chronos'),
+        chronos_attempt_timeout_sec=radte_option('timeout', 60, 'Per-attempt budget; enforced by child termination on Unix, R interrupt checks on Windows. 0/inf/none/off disables it.', backend='chronos'),
         chronos_dual_iter_max=radte_option('integer', 20L, 'Initial chronos dual.iter.max.', min_value=0L, backend='chronos'),
         chronos_eval_max=radte_option('integer', 250L, 'Initial chronos eval.max.', min_value=1L, backend='chronos'),
         chronos_high_control_fallback=radte_option('boolean', TRUE, 'Enable the high-cost chronos control fallback.', backend='chronos'),
         chronos_iter_max=radte_option('integer', 250L, 'Initial chronos iter.max.', min_value=1L, backend='chronos'),
-        chronos_lambda=radte_option('number', NULL, 'Chronos smoothing parameter (required for chronos).', min_value=0, backend='chronos', required='chronos'),
-        chronos_model=radte_option('choice', NULL, 'Chronos model (required for chronos).', choices=c('discrete', 'relaxed', 'correlated'), backend='chronos', required='chronos'),
-        chronos_total_timeout_sec=radte_option('timeout', 300, 'Total wall-time budget for chronos retries; 0/inf/none/off disables it.', backend='chronos'),
+        chronos_lambda=radte_option('number', NULL, 'Chronos smoothing parameter.', min_value=0, backend='chronos', required='chronos'),
+        chronos_model=radte_option('choice', NULL, 'Chronos model.', choices=c('discrete', 'relaxed', 'correlated'), backend='chronos', required='chronos'),
+        chronos_total_timeout_sec=radte_option('timeout', 300, 'Total chronos retry budget; Windows attempts may overrun it. 0/inf/none/off disables it.', backend='chronos'),
         dating_backend=radte_option('choice', 'chronos', 'Dating engine.', choices=c('chronos', 'mcmctree')),
-        gene_tree=radte_option('path', NULL, 'Rooted Newick gene tree (required in NOTUNG mode).', required='notung'),
-        generax_nhx=radte_option('path', NULL, 'GeneRax NHX reconciliation input.'),
+        gene_tree=radte_option('path', NULL, 'Rooted Newick gene tree.', required='notung'),
+        generax_nhx=radte_option('path', NULL, 'GeneRax NHX reconciliation input; choose this or --notung_parsable.'),
         max_age=radte_option('number', NULL, 'Upper age for duplication nodes above the species-tree root.', min_value=0, exclusive_min=TRUE, required='all'),
         mcmctree_bin=radte_option('path', 'mcmctree', 'MCMCTree executable name or path.', backend='mcmctree'),
         mcmctree_burnin=radte_option('integer', 2000L, 'MCMCTree burn-in samples.', min_value=1L, backend='mcmctree'),
@@ -74,20 +74,20 @@ get_radte_option_schema = function() {
         mcmctree_ncatG=radte_option('integer', 5L, 'MCMCTree number of gamma categories.', min_value=1L, backend='mcmctree'),
         mcmctree_nsample=radte_option('integer', 20000L, 'MCMCTree number of posterior samples.', min_value=1L, backend='mcmctree'),
         mcmctree_sampfreq=radte_option('integer', 10L, 'MCMCTree sampling frequency.', min_value=1L, backend='mcmctree'),
-        mcmctree_seqfile=radte_option('path', NULL, 'MCMCTree alignment file (required for mcmctree).', backend='mcmctree', required='mcmctree'),
+        mcmctree_seqfile=radte_option('path', NULL, 'MCMCTree alignment file.', backend='mcmctree', required='mcmctree'),
         mcmctree_seqtype=radte_option('integer', 0L, 'MCMCTree sequence type.', min_value=0L, backend='mcmctree'),
         mcmctree_timeout_sec=radte_option('timeout', Inf, 'Wall-time limit for the external MCMCTree process.', backend='mcmctree'),
         mcmctree_usedata=radte_option('integer', 1L, 'MCMCTree usedata value; RADTE currently supports only 1.', min_value=1L, backend='mcmctree'),
         mcmctree_workdir=radte_option('path', NULL, 'Explicit MCMCTree staging directory; default is a unique directory under outdir.', backend='mcmctree'),
-        notung_parsable=radte_option('path', NULL, 'NOTUNG parsable reconciliation input.'),
+        notung_parsable=radte_option('path', NULL, 'NOTUNG parsable reconciliation input; choose this or --generax_nhx.'),
         outdir=radte_option('path', '.', 'Directory for RADTE output artifacts.'),
-        pad_short_edge=radte_option('number', NULL, 'Minimum dated branch length, subject to the original calibration bounds.', min_value=0, exclusive_min=TRUE),
+        pad_short_edge=radte_option('number', NULL, 'Floor for input gene branches; also minimum chronos dated branches within original bounds. No MCMCTree output minimum.', min_value=0, exclusive_min=TRUE),
         prefix=radte_option('string', 'radte', 'Output filename prefix.'),
         seed=radte_option('integer', 1L, 'Base random seed for chronos retries and MCMCTree.', min_value=1L),
-        species_map_tsv=radte_option('path', NULL, 'Species mapping TSV for --species_parser=map.'),
+        species_map_tsv=radte_option('path', NULL, 'Species mapping TSV; required with --species_parser=map.'),
         species_node_bounds_tsv=radte_option('path', NULL, 'Species-tree node age bounds TSV.'),
         species_parser=radte_option('choice', 'legacy', 'Species-label parser.', choices=c('legacy', 'taxonomic', 'regex', 'map')),
-        species_regex=radte_option('string', NULL, 'Species extraction regex for --species_parser=regex.'),
+        species_regex=radte_option('string', NULL, 'Species extraction regex; required with --species_parser=regex.'),
         species_tree=radte_option('path', NULL, 'Rooted, dated, fully bifurcating species tree.', required='all')
     )
 }
@@ -204,7 +204,7 @@ parse_radte_cli_args = function(command_args, print=TRUE) {
 
 format_radte_default = function(value) {
     if (is.null(value)) {
-        return('required/conditional')
+        return('not set')
     }
     if (is.logical(value)) {
         return(tolower(as.character(value)))
@@ -232,10 +232,13 @@ render_radte_help = function() {
     for (name in names(schema)) {
         spec = schema[[name]]
         choice_text = if (is.null(spec$choices)) '' else paste0(' Choices: ', paste(spec$choices, collapse=', '), '.')
+        required_text = if (is.null(spec$required)) '' else paste0(
+            '; required: ', if ('all' %in% spec$required) 'always' else paste(spec$required, collapse=', ')
+        )
         lines = c(
             lines,
             paste0('  --', name, '=VALUE'),
-            paste0('      ', spec$help, ' [default: ', format_radte_default(spec$default), '; backend: ', spec$backend, '].', choice_text)
+            paste0('      ', spec$help, ' [default: ', format_radte_default(spec$default), required_text, '; backend: ', spec$backend, '].', choice_text)
         )
     }
     paste(lines, collapse='\n')

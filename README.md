@@ -14,7 +14,7 @@ The divergence time of duplication nodes are estimated while constraining specia
 ![](img/radte_method.svg)
 
 ## Dependency
-* [R](https://www.r-project.org/): the CI matrix targets 4.3, 4.4, 4.5, and 4.6.
+* [R](https://www.r-project.org/) 4.3 or later: the CI matrix targets 4.3, 4.4, 4.5, and 4.6.
 * [ape](https://cran.r-project.org/package=ape)
 * [treeio](https://github.com/YuLab-SMU/treeio): required for `--generax_nhx`
 * [PAML / MCMCTree](https://github.com/abacus-gene/paml): optional, required for `--dating_backend=mcmctree`
@@ -30,11 +30,14 @@ Clone the repository or download its ZIP archive from `Code -> Download ZIP`. Th
 ```
 git clone https://github.com/kfuku52/RADTE
 cd RADTE
+Rscript -e 'install.packages("ape", repos="https://cloud.r-project.org")'
 ./radte.r --version
 ```
 
+See [installation and verification](docs/installation.md) for GeneRax/PAML dependencies, Windows commands, and a real input/output check. Version display alone does not check dependencies.
+
 ### Option 2: Bioconda (stable packaged release)
-RADTE is also available on Bioconda. The packaged version can lag behind the latest repository release, so check it with `conda list radte` before using recently added options.
+RADTE is also available on Bioconda. The packaged version can lag behind the source version, so check it with `conda list radte` before using recently added options. See the [packaged-release instructions](docs/installation.md#bioconda-packaged-release) for environment setup and matching documentation.
 ```
 conda install bioconda::radte
 ```

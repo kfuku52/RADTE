@@ -4,13 +4,30 @@ RADTE keeps maintainable modules and a portable one-file CLI in the same reposit
 
 ## Local setup
 
-Install normal and development dependencies:
+For runtime prerequisites and platform-specific commands, see [installation](docs/installation.md). Install normal and development dependencies from the repository root:
 
 ```sh
-RADTE_INSTALL_DEV=true Rscript test/install_dependencies.R
+Rscript -e "Sys.setenv(RADTE_INSTALL_DEV='true'); source('test/install_dependencies.R')"
 ```
 
-For the exact R 4.4 development environment, install `renv` and run `renv::restore()`. Compatibility work should still be tested through the same R 4.3–4.6 matrix used by CI; the lockfile is not a substitute for that matrix.
+### Recorded dependency environment
+
+`renv.lock` records R **4.4.3**, Bioconductor **3.20**, and specific R package versions. Install R 4.4.3 separately before reproducing this environment; renv does not install R, PAML, compilers, or system libraries. Compatibility work should still use the R 4.3–4.6 CI matrix; the lockfile is a separate reproducibility reference.
+
+This repository does not activate renv automatically. In a POSIX shell, select a local library explicitly before restoring or running checks:
+
+```sh
+mkdir -p .r-lib
+export R_LIBS_USER="$PWD/.r-lib"
+Rscript -e "stopifnot(getRversion() == '4.4.3'); install.packages('renv', repos='https://cloud.r-project.org')"
+Rscript -e "renv::restore(project='.', library=Sys.getenv('R_LIBS_USER'), prompt=FALSE)"
+Rscript -e "stopifnot(normalizePath(.libPaths()[1]) == normalizePath(Sys.getenv('R_LIBS_USER'))); renv::status(project='.', library=.libPaths())"
+make check
+```
+
+In PowerShell, replace the first two lines with `New-Item -ItemType Directory -Force .r-lib` and `$env:R_LIBS_USER = (Resolve-Path .r-lib).Path`; use the same R commands afterwards. Windows development also needs build tools and `make` (for example those supplied by the matching [Rtools](https://cran.r-project.org/bin/windows/Rtools/)).
+
+Keep `R_LIBS_USER` set to this absolute path in every terminal that should use the recorded packages; a new terminal needs the setting again. The check above runs in a fresh R process to verify the selected library and all libraries R searches. Restore can reuse matching package versions already installed in R's system library. `.r-lib/` is ignored by Git. This explicit-library workflow does not create an `.Rprofile` or switch other sessions to renv. A bare `renv::restore()` in an unactivated project can instead target the current user library. If you prefer renv auto-activation, follow its [activation instructions](https://rstudio.github.io/renv/reference/activate.html) before restoring, and keep that setup separate from unrelated changes.
 
 ## Change loop
 

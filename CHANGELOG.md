@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.3
+
+- Make the bundled usage examples runnable from the repository root with separate output directories, and label external-tool templates and historical reference outputs explicitly.
+- Align calibration, retry-order, padding, timeout, and output descriptions with the current implementation; fix the mirror diagram link and replace the old ape documentation link.
+- Add runtime installation and verification guidance and an explicit local-library workflow for restoring the R 4.4.3 development dependencies; include the missing Bioconductor version marker in the lockfile.
+- Distinguish unset option defaults from required conditions in generated CLI help and documentation without changing argument validation or dating behavior.
+
 ## 0.6.2
 
 - Keep documentation-only CI lightweight when the required patch version bump also updates metadata and the generated CLI. Dependency, runtime, executable-mode, and release changes still receive full validation.
